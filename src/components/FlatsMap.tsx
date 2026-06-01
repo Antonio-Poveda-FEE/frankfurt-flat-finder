@@ -68,6 +68,7 @@ function FitBounds({ points }: { points: google.maps.LatLngLiteral[] }) {
 export default function FlatsMap({ flats, pois }: { flats: MapFlat[]; pois: Poi[] }) {
   const navigate = useNavigate()
   const [showHoods, setShowHoods] = useState(false)
+  const [satellite, setSatellite] = useState(false)
 
   const located = flats.filter((f) => f.flat.lat != null && f.flat.lng != null)
   const locatedPois = pois.filter((p) => p.lat != null && p.lng != null)
@@ -79,21 +80,36 @@ export default function FlatsMap({ flats, pois }: { flats: MapFlat[]; pois: Poi[
 
   return (
     <section className="overflow-hidden rounded-2xl bg-slate-900 ring-1 ring-slate-800">
-      <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
         <h2 className="font-semibold text-white">Mapa de pisos</h2>
-        <label className="flex items-center gap-2 text-xs text-slate-300">
-          <input type="checkbox" checked={showHoods} onChange={(e) => setShowHoods(e.target.checked)} className="h-4 w-4 accent-sky-500" />
-          Mostrar barrios
-        </label>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setSatellite((s) => !s)}
+            className={`rounded-md px-2 py-1 text-xs ring-1 ${satellite ? 'bg-sky-500/20 text-sky-300 ring-sky-500/50' : 'bg-slate-800 text-slate-300 ring-slate-700'}`}
+          >
+            🛰️ {satellite ? 'Vista mapa' : 'Satélite'}
+          </button>
+          <label className="flex items-center gap-2 text-xs text-slate-300">
+            <input type="checkbox" checked={showHoods} onChange={(e) => setShowHoods(e.target.checked)} className="h-4 w-4 accent-sky-500" />
+            Mostrar barrios
+          </label>
+        </div>
       </div>
       <div className="h-80 w-full">
         <Map
           id="compare"
           defaultCenter={FRANKFURT_CENTER}
           defaultZoom={12}
+          mapTypeId={satellite ? 'hybrid' : 'roadmap'}
           gestureHandling="greedy"
           clickableIcons={false}
           colorScheme="DARK"
+          mapTypeControl={false}
+          fullscreenControl={false}
+          streetViewControl={false}
+          rotateControl={false}
+          zoomControl={true}
           style={{ width: '100%', height: '100%' }}
         >
           <FitBounds points={points} />

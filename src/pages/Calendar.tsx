@@ -54,13 +54,11 @@ export default function Calendar() {
   const firstVisit = visits[0]?.date
   const [month, setMonth] = useState(monthKey(firstVisit ? parseDateKey(firstVisit) : new Date()))
   const [selectedDate, setSelectedDate] = useState(firstVisit ?? todayKey())
-  const [selectedVisitId, setSelectedVisitId] = useState<string | null>(visits[0]?.id ?? null)
   const [initialized, setInitialized] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const selectedDateVisits = byDate[selectedDate] ?? []
-  const selectedVisit = selectedDateVisits.find((v) => v.id === selectedVisitId) ?? selectedDateVisits[0] ?? null
   const cells = useMemo(() => buildMonthCells(month), [month])
 
   useEffect(() => {
@@ -68,10 +66,9 @@ export default function Calendar() {
     if (firstVisit) {
       setMonth(monthKey(parseDateKey(firstVisit)))
       setSelectedDate(firstVisit)
-      setSelectedVisitId(visits[0]?.id ?? null)
     }
     setInitialized(true)
-  }, [firstVisit, initialized, loading, visits])
+  }, [firstVisit, initialized, loading])
 
   async function exportEvents(events: VisitEvent[], filename: string) {
     if (events.length === 0) return
@@ -126,10 +123,7 @@ export default function Calendar() {
               <button
                 type="button"
                 key={cell.key}
-                onClick={() => {
-                  setSelectedDate(cell.key)
-                  setSelectedVisitId(dayVisits[0]?.id ?? null)
-                }}
+                onClick={() => setSelectedDate(cell.key)}
                 className={`relative min-h-16 rounded-lg p-1 text-left ring-1 transition ${
                   selected ? 'bg-sky-500/20 ring-sky-400' : 'bg-slate-950/60 ring-slate-800 hover:ring-slate-600'
                 } ${cell.inMonth ? 'text-slate-100' : 'text-slate-600'}`}
@@ -156,16 +150,16 @@ export default function Calendar() {
           <div>
             <h2 className="font-semibold text-white">{formatDateKey(selectedDate)}</h2>
             <p className="text-xs text-slate-500">
-              {selectedVisit?.time ? `Visita a las ${formatVisitTime(selectedVisit.time)}` : 'Eventos de día completo cuando no hay hora específica.'}
+              {selectedDateVisits.length > 0 ? `${selectedDateVisits.length} visita(s) · pulsa un piso para abrir su ficha` : 'Sin visitas en esta fecha.'}
             </p>
           </div>
           <button
             type="button"
-            disabled={!selectedVisit || exporting}
-            onClick={() => selectedVisit && exportEvents([selectedVisit], `visita-${selectedVisit.date}-${fileSafeName(selectedVisit.flat.title)}.ics`)}
+            disabled={selectedDateVisits.length === 0 || exporting}
+            onClick={() => exportEvents(selectedDateVisits, `visitas-${selectedDate}.ics`)}
             className="rounded-lg bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 disabled:opacity-50"
           >
-            Exportar seleccionada
+            Exportar este día
           </button>
         </div>
 
@@ -173,39 +167,34 @@ export default function Calendar() {
           <p className="rounded-lg bg-slate-950 p-4 text-sm text-slate-400">No hay visitas en esta fecha.</p>
         ) : (
           <ul className="space-y-2">
-            {selectedDateVisits.map((visit) => {
-              const selected = selectedVisit?.id === visit.id
-              return (
-                <li key={visit.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedVisitId(visit.id)}
-                    className={`w-full rounded-lg p-3 text-left ring-1 ${
-                      selected ? 'bg-sky-500/10 ring-sky-500' : 'bg-slate-950 ring-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <Link to={`/flat/${visit.flat.id}`} className="font-semibold text-white hover:text-sky-300">
-                          {visit.flat.title}
-                        </Link>
-                        <p className="text-xs text-sky-300">{formatVisitTime(visit.time)}</p>
-                      </div>
-                      <span className="rounded px-1.5 py-0.5 text-[10px] font-medium"
-                        style={{ background: `${STATUS_META[visit.flat.status].color}22`, color: STATUS_META[visit.flat.status].color }}>
-                        {STATUS_META[visit.flat.status].label}
-                      </span>
-                    </div>
-                    <p className="mt-1 truncate text-xs text-slate-400">{visit.flat.address || 'Sin dirección'}</p>
-                  </button>
-                </li>
-              )
-            })}
+            {selectedDateVisits.map((visit) => (
+              <li key={visit.id} className="flex items-center gap-2 rounded-lg bg-slate-950 p-3 ring-1 ring-slate-800 hover:ring-slate-600">
+                <Link to={`/flat/${visit.flat.id}`} className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-semibold text-white">{visit.flat.title}</span>
+                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                      style={{ background: `${STATUS_META[visit.flat.status].color}22`, color: STATUS_META[visit.flat.status].color }}>
+                      {STATUS_META[visit.flat.status].label}
+                    </span>
+                  </div>
+                  <p className="text-xs text-sky-300">{formatVisitTime(visit.time)}</p>
+                  <p className="truncate text-xs text-slate-400">{visit.flat.address || 'Sin dirección'}</p>
+                </Link>
+                <span className="shrink-0 text-lg text-slate-500">›</span>
+                <button
+                  type="button"
+                  title="Exportar esta visita al calendario"
+                  disabled={exporting}
+                  onClick={() => exportEvents([visit], `visita-${visit.date}-${fileSafeName(visit.flat.title)}.ics`)}
+                  className="shrink-0 rounded-lg bg-slate-800 px-2 py-1.5 text-sm text-slate-200 disabled:opacity-50"
+                >📤</button>
+              </li>
+            ))}
           </ul>
         )}
         {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
         <p className="mt-3 text-[11px] text-slate-500">
-          En iPhone, abre el archivo .ics descargado o compartido y añádelo a Calendario. El envío por email puede llevar el enlace, pero no adjuntar archivos de forma fiable desde una web.
+          Pulsa un piso para ver su ficha, o 📤 para añadir esa visita al Calendario (en iPhone se abre la hoja de compartir).
         </p>
       </section>
     </div>

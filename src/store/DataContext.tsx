@@ -32,8 +32,10 @@ interface StoreContextValue extends StoreData {
   // photos
   uploadPhotos: (flatId: string, files: FileList | File[]) => Promise<void>
   deletePhoto: (photo: FlatPhoto) => Promise<void>
+  setPrimaryPhoto: (flatId: string, photoId: string) => Promise<void>
   // poi times
   setPoiTime: (flatId: string, poiId: string, mode: TravelMode, minutes: number | null, opts?: { auto?: boolean; distance_m?: number | null }) => Promise<void>
+  bulkSetPoiTimes: (flatId: string, rows: { poiId: string; mode: TravelMode; minutes: number | null; distance_m: number | null }[]) => Promise<void>
   // pois
   createPoi: (p: Partial<Poi>) => Promise<void>
   updatePoi: (id: string, patch: Partial<Poi>) => Promise<void>
@@ -143,9 +145,24 @@ export function StoreProvider({ session, children }: { session: Session; childre
     await reloadAll()
   }, [reloadAll])
 
+  const setPrimaryPhoto = useCallback(async (flatId: string, photoId: string) => {
+    await supabase.from('flat_photos').update({ is_primary: false }).eq('flat_id', flatId)
+    await supabase.from('flat_photos').update({ is_primary: true }).eq('id', photoId)
+    await reloadAll()
+  }, [reloadAll])
+
   const setPoiTime = useCallback(async (flatId: string, poiId: string, mode: TravelMode, minutes: number | null, opts?: { auto?: boolean; distance_m?: number | null }) => {
     await supabase.from('flat_poi_times').upsert(
       { flat_id: flatId, poi_id: poiId, mode, minutes, auto: opts?.auto ?? false, distance_m: opts?.distance_m ?? null },
+      { onConflict: 'flat_id,poi_id,mode' }
+    )
+    await reloadAll()
+  }, [reloadAll])
+
+  const bulkSetPoiTimes = useCallback(async (flatId: string, rows: { poiId: string; mode: TravelMode; minutes: number | null; distance_m: number | null }[]) => {
+    if (rows.length === 0) return
+    await supabase.from('flat_poi_times').upsert(
+      rows.map((r) => ({ flat_id: flatId, poi_id: r.poiId, mode: r.mode, minutes: r.minutes, distance_m: r.distance_m, auto: true })),
       { onConflict: 'flat_id,poi_id,mode' }
     )
     await reloadAll()
@@ -174,9 +191,9 @@ export function StoreProvider({ session, children }: { session: Session; childre
 
   const value = useMemo<StoreContextValue>(() => ({
     ...data, session, email, loading, reloadAll,
-    createFlat, updateFlat, deleteFlat, saveCosts, uploadPhotos, deletePhoto, setPoiTime,
+    createFlat, updateFlat, deleteFlat, saveCosts, uploadPhotos, deletePhoto, setPrimaryPhoto, setPoiTime, bulkSetPoiTimes,
     createPoi, updatePoi, deletePoi, createCriterion, updateCriterion, deleteCriterion, setScore, saveSettings,
-  }), [data, session, email, loading, reloadAll, createFlat, updateFlat, deleteFlat, saveCosts, uploadPhotos, deletePhoto, setPoiTime, createPoi, updatePoi, deletePoi, createCriterion, updateCriterion, deleteCriterion, setScore, saveSettings])
+  }), [data, session, email, loading, reloadAll, createFlat, updateFlat, deleteFlat, saveCosts, uploadPhotos, deletePhoto, setPrimaryPhoto, setPoiTime, bulkSetPoiTimes, createPoi, updatePoi, deletePoi, createCriterion, updateCriterion, deleteCriterion, setScore, saveSettings])
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }

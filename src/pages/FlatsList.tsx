@@ -5,7 +5,7 @@ import { computeFlatScores } from '../lib/stats'
 import { monthlyTotal, pricePerM2 } from '../lib/costs'
 import { eur, num, scoreColor } from '../lib/format'
 import { photoUrl } from '../lib/supabase'
-import { STATUS_META } from '../lib/types'
+import { STATUS_META, coverPhoto } from '../lib/types'
 import type { FlatStatus } from '../lib/types'
 
 type SortKey = 'score' | 'price' | 'recent'
@@ -34,7 +34,7 @@ export default function FlatsList() {
         rated: scoreMap.get(f.id)?.ratedCriteria ?? 0,
         total: monthlyTotal(costs[f.id]),
         ppm2: pricePerM2(costs[f.id], f.size_m2),
-        cover: photos[f.id]?.[0],
+        cover: coverPhoto(photos[f.id]),
       }))
     list.sort((a, b) => {
       if (sort === 'price') return a.total - b.total

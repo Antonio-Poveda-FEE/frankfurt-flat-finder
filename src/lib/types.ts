@@ -54,6 +54,13 @@ export interface FlatPhoto {
   storage_path: string
   caption: string | null
   sort_order: number
+  is_primary: boolean
+}
+
+/** Cover photo for a flat: the primary one, else the first by sort order. */
+export function coverPhoto(photos: FlatPhoto[] | undefined): FlatPhoto | undefined {
+  if (!photos || photos.length === 0) return undefined
+  return photos.find((p) => p.is_primary) ?? photos[0]
 }
 
 export interface FlatPoiTime {

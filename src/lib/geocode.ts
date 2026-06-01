@@ -1,6 +1,17 @@
 /// <reference types="google.maps" />
+import type { TravelMode } from './types'
 
 export interface LatLng { lat: number; lng: number }
+
+/** Maps our app travel mode → Google Maps TravelMode (runtime enum). */
+export function gMode(mode: TravelMode): google.maps.TravelMode {
+  switch (mode) {
+    case 'walk': return google.maps.TravelMode.WALKING
+    case 'bike': return google.maps.TravelMode.BICYCLING
+    case 'transit': return google.maps.TravelMode.TRANSIT
+    default: return google.maps.TravelMode.DRIVING
+  }
+}
 
 /** Address → coordinates using the Geocoding library. Returns null on failure. */
 export async function geocodeAddress(
@@ -29,9 +40,11 @@ export function distanceMatrix(
   travelMode: google.maps.TravelMode
 ): Promise<(TravelResult | null)[]> {
   if (destinations.length === 0) return Promise.resolve([])
+  const request: google.maps.DistanceMatrixRequest = { origins: [origin], destinations, travelMode }
+  if (travelMode === google.maps.TravelMode.TRANSIT) request.transitOptions = { departureTime: new Date() }
   return new Promise((resolve) => {
     service.getDistanceMatrix(
-      { origins: [origin], destinations, travelMode },
+      request,
       (res, status) => {
         if (status !== 'OK' || !res) {
           resolve(destinations.map(() => null))

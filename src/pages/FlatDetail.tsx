@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMapsLibrary } from '@vis.gl/react-google-maps'
 import { useStore } from '../store/DataContext'
@@ -7,7 +7,7 @@ import { monthlyTotal, pricePerM2 } from '../lib/costs'
 import { eur, eur2, num, scoreColor } from '../lib/format'
 import { photoUrl } from '../lib/supabase'
 import { directionsUrl, nearbyUrl, placeUrl } from '../lib/maps'
-import { distanceMatrix } from '../lib/geocode'
+import { distanceMatrix, gMode } from '../lib/geocode'
 import { hasMaps } from '../lib/config'
 import { COST_FIELDS, STATUS_META, TRAVEL_MODES } from '../lib/types'
 import type { TravelMode } from '../lib/types'
@@ -18,35 +18,53 @@ import NearbyMap from '../components/NearbyMap'
 export default function FlatDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { flats, costs, photos, pois, poiTimes, criteria, scores, setPoiTime, deleteFlat } = useStore()
+  const { flats, costs, photos, pois, poiTimes, criteria, scores, setPoiTime, bulkSetPoiTimes, deleteFlat } = useStore()
   const flat = flats.find((f) => f.id === id)
   const routesLib = useMapsLibrary('routes')
   const [nearbyCat, setNearbyCat] = useState<NearbyCategory | null>(null)
-  const [calcPoi, setCalcPoi] = useState<string | null>(null)
+  const [calculating, setCalculating] = useState(false)
+  const autoTried = useRef<string | null>(null)
 
   const scoreMap = useMemo(() => computeFlatScores(criteria, scores), [criteria, scores])
+
+  const times = flat ? (poiTimes[flat.id] ?? []) : []
+  const poisWithCoords = pois.filter((p) => p.lat != null && p.lng != null)
+  const canCalc = hasMaps() && routesLib != null && flat?.lat != null && flat?.lng != null
+
+  // Compute travel time for every mode to every located POI (4 Distance Matrix calls).
+  const runCalc = useCallback(async () => {
+    if (!flat || !routesLib || flat.lat == null || flat.lng == null) return
+    const dests = pois.filter((p) => p.lat != null && p.lng != null)
+    if (dests.length === 0) return
+    setCalculating(true)
+    const origin = { lat: flat.lat, lng: flat.lng }
+    const dm = new routesLib.DistanceMatrixService()
+    const rows: { poiId: string; mode: TravelMode; minutes: number | null; distance_m: number | null }[] = []
+    for (const m of TRAVEL_MODES) {
+      const results = await distanceMatrix(dm, origin, dests.map((d) => ({ lat: d.lat!, lng: d.lng! })), gMode(m.mode))
+      results.forEach((r, i) => rows.push({ poiId: dests[i].id, mode: m.mode, minutes: r?.minutes ?? null, distance_m: r?.meters ?? null }))
+    }
+    await bulkSetPoiTimes(flat.id, rows)
+    setCalculating(false)
+  }, [flat, routesLib, pois, bulkSetPoiTimes])
+
+  // Auto-calculate once per flat when coordinates + POIs are available and times are missing.
+  useEffect(() => {
+    if (!flat || !canCalc || poisWithCoords.length === 0) return
+    const haveAll = poisWithCoords.every((p) => TRAVEL_MODES.every((m) => times.some((t) => t.poi_id === p.id && t.mode === m.mode && t.auto)))
+    if (haveAll || autoTried.current === flat.id) return
+    autoTried.current = flat.id
+    void runCalc()
+  }, [flat, canCalc, poisWithCoords.length, times.length, runCalc])
+
   if (!flat) return <p className="text-slate-400">Piso no encontrado. <Link className="text-sky-400" to="/">Volver</Link></p>
 
   const score = scoreMap.get(flat.id)?.global ?? null
   const c = costs[flat.id]
   const total = monthlyTotal(c)
   const ppm2 = pricePerM2(c, flat.size_m2)
-  const flatPhotos = photos[flat.id] ?? []
-  const times = poiTimes[flat.id] ?? []
+  const flatPhotos = [...(photos[flat.id] ?? [])].sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
   const recOf = (poiId: string, mode: TravelMode) => times.find((t) => t.poi_id === poiId && t.mode === mode)
-
-  async function calcDrive(poiId: string, poiLat: number | null, poiLng: number | null) {
-    if (!flat || !routesLib || flat.lat == null || flat.lng == null) return
-    setCalcPoi(poiId)
-    const dest = poiLat != null && poiLng != null ? { lat: poiLat, lng: poiLng } : null
-    if (!dest) { setCalcPoi(null); return }
-    const dm = new routesLib.DistanceMatrixService()
-    const [res] = await distanceMatrix(dm, { lat: flat.lat, lng: flat.lng }, [dest], google.maps.TravelMode.DRIVING)
-    if (res) await setPoiTime(flat.id, poiId, 'drive', res.minutes, { auto: true, distance_m: res.meters })
-    setCalcPoi(null)
-  }
-
-  const canCalc = hasMaps() && routesLib != null && flat.lat != null && flat.lng != null
 
   return (
     <div className="space-y-5">
@@ -117,17 +135,33 @@ export default function FlatDetail() {
 
       {/* Travel times to POIs */}
       <section className="rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="font-semibold text-white">Tiempos a puntos de interés</h2>
-          <Link to="/settings" className="text-xs text-sky-400">Gestionar POIs</Link>
+          <div className="flex items-center gap-2">
+            {canCalc && poisWithCoords.length > 0 && (
+              <button type="button" onClick={() => { autoTried.current = flat.id; void runCalc() }} disabled={calculating}
+                className="rounded-md bg-sky-600 px-2 py-1 text-[11px] text-white hover:bg-sky-500 disabled:opacity-50">
+                {calculating ? 'Calculando…' : '🔄 Calcular tiempos'}
+              </button>
+            )}
+            <Link to="/settings" className="text-xs text-sky-400">POIs</Link>
+          </div>
         </div>
         {pois.length === 0 ? (
           <p className="text-sm text-slate-500">Añade puntos de interés en Ajustes (trabajo, gimnasio, centro…).</p>
         ) : (
           <div className="space-y-4">
-            {pois.map((poi) => (
+            {!canCalc && hasMaps() && (flat.lat == null || flat.lng == null) && (
+              <p className="text-xs text-amber-400">Este piso no tiene coordenadas: edítalo y pulsa «Obtener coordenadas» para calcular los tiempos automáticamente.</p>
+            )}
+            {pois.map((poi) => {
+              const noCoords = poi.lat == null || poi.lng == null
+              return (
               <div key={poi.id}>
-                <p className="mb-1 text-sm font-medium text-slate-200">{poi.label}</p>
+                <p className="mb-1 text-sm font-medium text-slate-200">
+                  {poi.label}
+                  {noCoords && <span className="ml-2 text-[10px] text-amber-400">sin dirección/coordenadas</span>}
+                </p>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {TRAVEL_MODES.map((m) => {
                     const rec = recOf(poi.id, m.mode)
@@ -138,16 +172,9 @@ export default function FlatDetail() {
                           className="flex items-center justify-between text-xs text-sky-300 hover:underline">
                           <span>{m.emoji} {m.label}</span><span>↗</span>
                         </a>
-                        {m.mode === 'drive' && canCalc ? (
-                          <div className="mt-1 flex items-center gap-1">
-                            <div className="flex-1 rounded bg-slate-900 px-1.5 py-1 text-center text-xs text-white ring-1 ring-slate-700">
-                              {calcPoi === poi.id ? '…' : mins != null ? `${mins} min` : '—'}
-                            </div>
-                            <button type="button" title="Calcular en coche"
-                              onClick={() => calcDrive(poi.id, poi.lat, poi.lng)}
-                              className="rounded bg-sky-600 px-2 py-1 text-[11px] text-white hover:bg-sky-500">
-                              {mins != null ? '↻' : '🚗'}
-                            </button>
+                        {canCalc ? (
+                          <div className="mt-1 rounded bg-slate-900 px-1.5 py-1 text-center text-xs text-white ring-1 ring-slate-700">
+                            {calculating ? '…' : mins != null ? `${mins} min` : '—'}
                           </div>
                         ) : (
                           <div className="mt-1 flex items-center gap-1">
@@ -168,7 +195,8 @@ export default function FlatDetail() {
                   })}
                 </div>
               </div>
-            ))}
+            )})}
+            {canCalc && <p className="text-[11px] text-slate-500">Calculado automáticamente con Google Maps. La bici/metro puede no estar disponible en algunas zonas (—).</p>}
           </div>
         )}
         <div className="mt-3 flex flex-wrap gap-2">

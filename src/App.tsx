@@ -10,6 +10,7 @@ import FlatsList from './pages/FlatsList'
 import FlatDetail from './pages/FlatDetail'
 import FlatForm from './pages/FlatForm'
 import Compare from './pages/Compare'
+import Calendar from './pages/Calendar'
 import Settings from './pages/Settings'
 
 export default function App() {
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/flat/:id" element={<FlatDetail />} />
           <Route path="/flat/:id/edit" element={<FlatForm />} />
           <Route path="/compare" element={<Compare />} />
+          <Route path="/calendar" element={<Calendar />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

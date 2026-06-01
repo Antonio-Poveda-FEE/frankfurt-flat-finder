@@ -30,6 +30,7 @@ export interface Flat {
   listing_url: string | null
   available_from: string | null
   visited_on: string | null
+  visit_time?: string | null
   notes: string | null
   created_at: string
   created_by: string | null

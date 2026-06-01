@@ -6,6 +6,7 @@ import { useStore } from '../store/DataContext'
 const navItems = [
   { to: '/', label: 'Pisos', icon: '🏠', end: true },
   { to: '/compare', label: 'Comparar', icon: '📊', end: false },
+  { to: '/calendar', label: 'Calendario', icon: '📅', end: false },
   { to: '/settings', label: 'Ajustes', icon: '⚙️', end: false },
 ]
 

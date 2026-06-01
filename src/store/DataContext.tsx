@@ -128,15 +128,21 @@ export function StoreProvider({ session, children }: { session: Session; childre
 
   const uploadPhotos = useCallback(async (flatId: string, files: FileList | File[]) => {
     const list = Array.from(files)
-    for (const file of list) {
-      const ext = file.name.split('.').pop() || 'jpg'
-      const path = `${flatId}/${crypto.randomUUID()}.${ext}`
-      const up = await supabase.storage.from(PHOTO_BUCKET).upload(path, file, { upsert: false })
-      if (!up.error) {
-        await supabase.from('flat_photos').insert({ flat_id: flatId, storage_path: path })
+    let insertedAny = false
+    try {
+      for (const file of list) {
+        const ext = file.name.split('.').pop() || 'jpg'
+        const path = `${flatId}/${crypto.randomUUID()}.${ext}`
+        const up = await supabase.storage.from(PHOTO_BUCKET).upload(path, file, { upsert: false })
+        if (up.error) throw up.error
+
+        const inserted = await supabase.from('flat_photos').insert({ flat_id: flatId, storage_path: path })
+        if (inserted.error) throw inserted.error
+        insertedAny = true
       }
+    } finally {
+      if (insertedAny) await reloadAll()
     }
-    await reloadAll()
   }, [reloadAll])
 
   const deletePhoto = useCallback(async (photo: FlatPhoto) => {

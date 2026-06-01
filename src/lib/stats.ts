@@ -157,8 +157,8 @@ export function buildRecommendation(
     .filter((x) => x.fs && x.fs.global != null)
     .map((x) => ({ flat: x.flat, global: x.fs!.global as number }))
     .sort((a, a2) => {
-      const da = a.flat.visited_on || a.flat.created_at
-      const db = a2.flat.visited_on || a2.flat.created_at
+      const da = `${a.flat.visited_on || a.flat.created_at} ${a.flat.visit_time ?? ''}`
+      const db = `${a2.flat.visited_on || a2.flat.created_at} ${a2.flat.visit_time ?? ''}`
       return da < db ? -1 : da > db ? 1 : 0
     })
 

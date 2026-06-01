@@ -8,12 +8,19 @@ export default function PhotoManager({ flatId }: { flatId: string }) {
   const hasPrimary = list.some((p) => p.is_primary)
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     if (!e.target.files?.length) return
     setBusy(true)
-    await uploadPhotos(flatId, e.target.files)
-    setBusy(false)
+    setError(null)
+    try {
+      await uploadPhotos(flatId, e.target.files)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudieron subir las fotos.')
+    } finally {
+      setBusy(false)
+    }
     if (inputRef.current) inputRef.current.value = ''
   }
 
@@ -24,6 +31,7 @@ export default function PhotoManager({ flatId }: { flatId: string }) {
         className="w-full rounded-lg border border-dashed border-slate-600 py-3 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50">
         {busy ? 'Subiendo…' : '📷 Añadir fotos (cámara o galería)'}
       </button>
+      {error && <p className="text-sm text-red-300">{error}</p>}
       {list.length > 0 && (
         <>
           <div className="grid grid-cols-3 gap-2">

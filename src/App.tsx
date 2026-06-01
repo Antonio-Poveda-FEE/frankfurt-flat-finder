@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { StoreProvider } from './store/DataContext'
+import MapProvider from './components/MapProvider'
 import Login from './components/Login'
 import Layout from './components/Layout'
 import FlatsList from './pages/FlatsList'
@@ -32,6 +33,7 @@ export default function App() {
 
   return (
     <StoreProvider session={session}>
+      <MapProvider>
       <Layout>
         <Routes>
           <Route path="/" element={<FlatsList />} />
@@ -43,6 +45,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>
+      </MapProvider>
     </StoreProvider>
   )
 }

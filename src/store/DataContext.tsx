@@ -33,7 +33,7 @@ interface StoreContextValue extends StoreData {
   uploadPhotos: (flatId: string, files: FileList | File[]) => Promise<void>
   deletePhoto: (photo: FlatPhoto) => Promise<void>
   // poi times
-  setPoiTime: (flatId: string, poiId: string, mode: TravelMode, minutes: number | null) => Promise<void>
+  setPoiTime: (flatId: string, poiId: string, mode: TravelMode, minutes: number | null, opts?: { auto?: boolean; distance_m?: number | null }) => Promise<void>
   // pois
   createPoi: (p: Partial<Poi>) => Promise<void>
   updatePoi: (id: string, patch: Partial<Poi>) => Promise<void>
@@ -143,9 +143,9 @@ export function StoreProvider({ session, children }: { session: Session; childre
     await reloadAll()
   }, [reloadAll])
 
-  const setPoiTime = useCallback(async (flatId: string, poiId: string, mode: TravelMode, minutes: number | null) => {
+  const setPoiTime = useCallback(async (flatId: string, poiId: string, mode: TravelMode, minutes: number | null, opts?: { auto?: boolean; distance_m?: number | null }) => {
     await supabase.from('flat_poi_times').upsert(
-      { flat_id: flatId, poi_id: poiId, mode, minutes },
+      { flat_id: flatId, poi_id: poiId, mode, minutes, auto: opts?.auto ?? false, distance_m: opts?.distance_m ?? null },
       { onConflict: 'flat_id,poi_id,mode' }
     )
     await reloadAll()

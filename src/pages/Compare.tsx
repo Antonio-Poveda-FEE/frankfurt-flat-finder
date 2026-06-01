@@ -8,12 +8,15 @@ import { buildRecommendation, computeFlatScores } from '../lib/stats'
 import { monthlyTotal, pricePerM2 } from '../lib/costs'
 import { eur, num, scoreColor } from '../lib/format'
 import RecommendationPanel from '../components/RecommendationPanel'
+import FlatsMap from '../components/FlatsMap'
+import { hasMaps } from '../lib/config'
 
 const RADAR_COLORS = ['#38bdf8', '#f59e0b', '#34d399', '#f472b6', '#a78bfa']
 
 export default function Compare() {
-  const { flats, scores, criteria, costs, settings, loading } = useStore()
+  const { flats, scores, criteria, costs, settings, pois, loading } = useStore()
   const scoreMap = useMemo(() => computeFlatScores(criteria, scores), [criteria, scores])
+  const mapFlats = useMemo(() => flats.map((f) => ({ flat: f, score: scoreMap.get(f.id)?.global ?? null })), [flats, scoreMap])
   const rec = useMemo(() => buildRecommendation(flats, scoreMap, settings), [flats, scoreMap, settings])
 
   const ranked = useMemo(() =>
@@ -46,6 +49,8 @@ export default function Compare() {
   return (
     <div className="space-y-5">
       <RecommendationPanel rec={rec} />
+
+      {hasMaps() && flats.length > 0 && <FlatsMap flats={mapFlats} pois={pois} />}
 
       {ranked.length === 0 ? (
         <p className="rounded-2xl bg-slate-900 p-6 text-center text-slate-400 ring-1 ring-slate-800">

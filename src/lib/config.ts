@@ -8,3 +8,13 @@ export const SUPABASE_KEY =
   import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_rpALg8B8cQiGy8jfnM8KIQ__Dz3_zPa'
 
 export const PHOTO_BUCKET = 'flat-photos'
+
+// Google Maps Platform key. Must be restricted by HTTP referrer + API in the
+// Google Cloud console (it necessarily ships in the client bundle). When empty,
+// the app degrades gracefully: maps are replaced by external Google Maps links.
+export const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || ''
+
+export const hasMaps = (): boolean => GOOGLE_MAPS_KEY.length > 0
+
+// Frankfurt am Main centre, used as the default map view.
+export const FRANKFURT_CENTER = { lat: 50.1109, lng: 8.6821 }

@@ -1,20 +1,28 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useMapsLibrary } from '@vis.gl/react-google-maps'
 import { useStore } from '../store/DataContext'
 import { computeFlatScores } from '../lib/stats'
 import { monthlyTotal, pricePerM2 } from '../lib/costs'
 import { eur, eur2, num, scoreColor } from '../lib/format'
 import { photoUrl } from '../lib/supabase'
 import { directionsUrl, nearbyUrl, placeUrl } from '../lib/maps'
+import { distanceMatrix } from '../lib/geocode'
+import { hasMaps } from '../lib/config'
 import { COST_FIELDS, STATUS_META, TRAVEL_MODES } from '../lib/types'
 import type { TravelMode } from '../lib/types'
+import type { NearbyCategory } from '../lib/places'
 import ScoreEditor from '../components/ScoreEditor'
+import NearbyMap from '../components/NearbyMap'
 
 export default function FlatDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { flats, costs, photos, pois, poiTimes, criteria, scores, setPoiTime, deleteFlat } = useStore()
   const flat = flats.find((f) => f.id === id)
+  const routesLib = useMapsLibrary('routes')
+  const [nearbyCat, setNearbyCat] = useState<NearbyCategory | null>(null)
+  const [calcPoi, setCalcPoi] = useState<string | null>(null)
 
   const scoreMap = useMemo(() => computeFlatScores(criteria, scores), [criteria, scores])
   if (!flat) return <p className="text-slate-400">Piso no encontrado. <Link className="text-sky-400" to="/">Volver</Link></p>
@@ -25,7 +33,20 @@ export default function FlatDetail() {
   const ppm2 = pricePerM2(c, flat.size_m2)
   const flatPhotos = photos[flat.id] ?? []
   const times = poiTimes[flat.id] ?? []
-  const timeOf = (poiId: string, mode: TravelMode) => times.find((t) => t.poi_id === poiId && t.mode === mode)?.minutes ?? null
+  const recOf = (poiId: string, mode: TravelMode) => times.find((t) => t.poi_id === poiId && t.mode === mode)
+
+  async function calcDrive(poiId: string, poiLat: number | null, poiLng: number | null) {
+    if (!flat || !routesLib || flat.lat == null || flat.lng == null) return
+    setCalcPoi(poiId)
+    const dest = poiLat != null && poiLng != null ? { lat: poiLat, lng: poiLng } : null
+    if (!dest) { setCalcPoi(null); return }
+    const dm = new routesLib.DistanceMatrixService()
+    const [res] = await distanceMatrix(dm, { lat: flat.lat, lng: flat.lng }, [dest], google.maps.TravelMode.DRIVING)
+    if (res) await setPoiTime(flat.id, poiId, 'drive', res.minutes, { auto: true, distance_m: res.meters })
+    setCalcPoi(null)
+  }
+
+  const canCalc = hasMaps() && routesLib != null && flat.lat != null && flat.lng != null
 
   return (
     <div className="space-y-5">
@@ -109,25 +130,39 @@ export default function FlatDetail() {
                 <p className="mb-1 text-sm font-medium text-slate-200">{poi.label}</p>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {TRAVEL_MODES.map((m) => {
-                    const mins = timeOf(poi.id, m.mode)
+                    const rec = recOf(poi.id, m.mode)
+                    const mins = rec?.minutes ?? null
                     return (
                       <div key={m.mode} className="rounded-lg bg-slate-800/70 p-2">
                         <a href={directionsUrl(flat, poi, m.mode)} target="_blank" rel="noreferrer"
                           className="flex items-center justify-between text-xs text-sky-300 hover:underline">
                           <span>{m.emoji} {m.label}</span><span>↗</span>
                         </a>
-                        <div className="mt-1 flex items-center gap-1">
-                          <input
-                            type="number" inputMode="numeric" placeholder="min"
-                            defaultValue={mins ?? ''}
-                            onBlur={(e) => {
-                              const val = e.target.value === '' ? null : Number(e.target.value)
-                              if (val !== mins) void setPoiTime(flat.id, poi.id, m.mode, val)
-                            }}
-                            className="w-full rounded bg-slate-900 px-1.5 py-1 text-center text-xs text-white ring-1 ring-slate-700"
-                          />
-                          <span className="text-[10px] text-slate-500">min</span>
-                        </div>
+                        {m.mode === 'drive' && canCalc ? (
+                          <div className="mt-1 flex items-center gap-1">
+                            <div className="flex-1 rounded bg-slate-900 px-1.5 py-1 text-center text-xs text-white ring-1 ring-slate-700">
+                              {calcPoi === poi.id ? '…' : mins != null ? `${mins} min` : '—'}
+                            </div>
+                            <button type="button" title="Calcular en coche"
+                              onClick={() => calcDrive(poi.id, poi.lat, poi.lng)}
+                              className="rounded bg-sky-600 px-2 py-1 text-[11px] text-white hover:bg-sky-500">
+                              {mins != null ? '↻' : '🚗'}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="mt-1 flex items-center gap-1">
+                            <input
+                              type="number" inputMode="numeric" placeholder="min"
+                              defaultValue={mins ?? ''}
+                              onBlur={(e) => {
+                                const val = e.target.value === '' ? null : Number(e.target.value)
+                                if (val !== mins) void setPoiTime(flat.id, poi.id, m.mode, val)
+                              }}
+                              className="w-full rounded bg-slate-900 px-1.5 py-1 text-center text-xs text-white ring-1 ring-slate-700"
+                            />
+                            <span className="text-[10px] text-slate-500">min</span>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -137,14 +172,23 @@ export default function FlatDetail() {
           </div>
         )}
         <div className="mt-3 flex flex-wrap gap-2">
-          <a href={nearbyUrl(flat, 'bares restaurantes')} target="_blank" rel="noreferrer"
-            className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🍻 Bares/restaurantes cerca</a>
-          <a href={nearbyUrl(flat, 'parques')} target="_blank" rel="noreferrer"
-            className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🌳 Parques cerca</a>
-          <a href={nearbyUrl(flat, 'supermercado')} target="_blank" rel="noreferrer"
-            className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🛒 Supermercados cerca</a>
+          {hasMaps() ? (
+            <>
+              <button onClick={() => setNearbyCat('food')} className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🍻 Bares/restaurantes cerca</button>
+              <button onClick={() => setNearbyCat('park')} className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🌳 Parques cerca</button>
+              <button onClick={() => setNearbyCat('supermarket')} className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🛒 Supermercados cerca</button>
+            </>
+          ) : (
+            <>
+              <a href={nearbyUrl(flat, 'bares restaurantes')} target="_blank" rel="noreferrer" className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🍻 Bares/restaurantes cerca</a>
+              <a href={nearbyUrl(flat, 'parques')} target="_blank" rel="noreferrer" className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🌳 Parques cerca</a>
+              <a href={nearbyUrl(flat, 'supermercado')} target="_blank" rel="noreferrer" className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🛒 Supermercados cerca</a>
+            </>
+          )}
         </div>
       </section>
+
+      {nearbyCat && <NearbyMap flat={flat} category={nearbyCat} onClose={() => setNearbyCat(null)} />}
 
       {/* Notes */}
       {flat.notes && (

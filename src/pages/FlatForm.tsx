@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../store/DataContext'
+import { useGeocode } from '../lib/useGeocode'
 import { COST_FIELDS, STATUS_META } from '../lib/types'
 import type { Flat, FlatCosts, FlatStatus } from '../lib/types'
 import PhotoManager from '../components/PhotoManager'
@@ -15,10 +16,24 @@ export default function FlatForm() {
   const editing = Boolean(id)
   const navigate = useNavigate()
   const { flats, costs, createFlat, updateFlat, saveCosts } = useStore()
+  const geocode = useGeocode()
 
   const [form, setForm] = useState(emptyForm)
   const [cost, setCost] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
+  const [geo, setGeo] = useState<string | null>(null)
+
+  async function lookupCoords() {
+    if (!geocode || !form.address.trim()) return
+    setGeo('buscando')
+    const c = await geocode(form.address.trim())
+    if (c) {
+      setForm((f) => ({ ...f, lat: c.lat.toFixed(6), lng: c.lng.toFixed(6) }))
+      setGeo('ok')
+    } else {
+      setGeo('error')
+    }
+  }
 
   useEffect(() => {
     if (!editing) return
@@ -45,11 +60,18 @@ export default function FlatForm() {
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setBusy(true)
+    // Auto-geocode if we have an address but no coordinates yet.
+    let lat = form.lat ? Number(form.lat) : null
+    let lng = form.lng ? Number(form.lng) : null
+    if ((lat == null || lng == null) && geocode && form.address.trim()) {
+      const c = await geocode(form.address.trim())
+      if (c) { lat = c.lat; lng = c.lng }
+    }
     const payload: Partial<Flat> = {
       title: form.title.trim(),
       address: form.address.trim() || null,
-      lat: form.lat ? Number(form.lat) : null,
-      lng: form.lng ? Number(form.lng) : null,
+      lat,
+      lng,
       size_m2: form.size_m2 ? Number(form.size_m2) : null,
       rooms: form.rooms ? Number(form.rooms) : null,
       status: form.status,
@@ -89,7 +111,20 @@ export default function FlatForm() {
         <div>
           <label className={label}>Dirección</label>
           <input value={form.address} onChange={set('address')} placeholder="Calle, número, 60486 Frankfurt" className={input} />
-          <p className="mt-1 text-[11px] text-slate-500">Si añades lat/lng abajo, los enlaces a Google Maps serán más precisos (opcional).</p>
+          <div className="mt-1 flex items-center gap-2">
+            {geocode && (
+              <button type="button" onClick={lookupCoords} disabled={!form.address.trim()}
+                className="rounded-md bg-slate-800 px-2 py-1 text-[11px] text-sky-300 ring-1 ring-slate-700 disabled:opacity-40">
+                📍 Obtener coordenadas
+              </button>
+            )}
+            <span className="text-[11px] text-slate-500">
+              {geo === 'buscando' ? 'Buscando…'
+                : geo === 'ok' ? '✓ Coordenadas obtenidas'
+                : geo === 'error' ? '⚠ No encontradas'
+                : geocode ? 'Se geocodifica sola al guardar.' : 'Añade lat/lng para los mapas (opcional).'}
+            </span>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className={label}>Latitud</label><input value={form.lat} onChange={set('lat')} inputMode="decimal" placeholder="50.118" className={input} /></div>

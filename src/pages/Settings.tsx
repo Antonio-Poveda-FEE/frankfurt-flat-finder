@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../store/DataContext'
+import { useGeocode } from '../lib/useGeocode'
 
 export default function Settings() {
   const {
     pois, criteria, settings,
     createPoi, deletePoi, createCriterion, updateCriterion, deleteCriterion, saveSettings,
   } = useStore()
+  const geocode = useGeocode()
 
   // POI form
   const [poiLabel, setPoiLabel] = useState('')
@@ -80,7 +82,13 @@ export default function Settings() {
           <input className={`flex-1 ${input}`} placeholder="Dirección" value={poiAddr} onChange={(e) => setPoiAddr(e.target.value)} />
           <button
             disabled={!poiLabel.trim()}
-            onClick={async () => { await createPoi({ label: poiLabel.trim(), address: poiAddr.trim() || null }); setPoiLabel(''); setPoiAddr('') }}
+            onClick={async () => {
+              const addr = poiAddr.trim()
+              let coords: { lat: number; lng: number } | null = null
+              if (geocode && addr) coords = await geocode(addr)
+              await createPoi({ label: poiLabel.trim(), address: addr || null, lat: coords?.lat ?? null, lng: coords?.lng ?? null })
+              setPoiLabel(''); setPoiAddr('')
+            }}
             className="rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Añadir</button>
         </div>
       </section>

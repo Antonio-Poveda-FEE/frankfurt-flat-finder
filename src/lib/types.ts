@@ -62,6 +62,8 @@ export interface FlatPoiTime {
   poi_id: string
   mode: TravelMode
   minutes: number | null
+  auto: boolean
+  distance_m: number | null
 }
 
 export interface Score {

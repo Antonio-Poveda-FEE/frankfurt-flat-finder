@@ -43,6 +43,25 @@ que construye y publica en GitHub Pages. Activa Pages en *Settings → Pages →
 La app usa `base: './'` + `HashRouter`, así que funciona en cualquier subruta de Pages
 sin reconfigurar.
 
+## Google Maps
+
+Las funciones de mapa (geocodificación de direcciones, auto-cálculo del tiempo en
+coche a los POIs, mapa de sitios cercanos con rutas andando, y mapa de pisos con
+barrios) usan **Google Maps Platform**. Necesitas una API key con estas APIs activadas:
+
+- Maps JavaScript API · Places API · Directions API · Distance Matrix API · Geocoding API
+
+**Restricción obligatoria** de la clave (Google Cloud → Credentials → tu key):
+- *Application restrictions → Websites (HTTP referrers)*: `http://localhost:5173/*` y `https://antonio-poveda-fee.github.io/*`
+- *API restrictions*: limita a las 5 APIs de arriba.
+
+La clave **no se guarda en el repo**: se inyecta en el build desde el *secret*
+`VITE_GOOGLE_MAPS_KEY` (Settings → Secrets and variables → Actions). En local, ponla
+en un `.env`: `VITE_GOOGLE_MAPS_KEY=tu_clave`.
+
+Si no hay clave, la app **no se rompe**: los mapas se sustituyen por enlaces a Google
+Maps y los tiempos a POIs se introducen a mano (degradación elegante).
+
 ## Cuentas
 
 El acceso es por email + contraseña (Supabase Auth). Las cuentas de los dos usuarios

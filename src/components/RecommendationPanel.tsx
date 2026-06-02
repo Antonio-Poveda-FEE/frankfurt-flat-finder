@@ -1,4 +1,5 @@
 import type { Recommendation } from '../lib/stats'
+import { useT } from '../lib/i18n'
 
 const phaseStyle: Record<Recommendation['phase'], { bg: string; ring: string }> = {
   'no-data': { bg: 'bg-slate-800/60', ring: 'ring-slate-700' },
@@ -8,16 +9,17 @@ const phaseStyle: Record<Recommendation['phase'], { bg: string; ring: string }> 
 
 export default function RecommendationPanel({ rec }: { rec: Recommendation }) {
   const style = phaseStyle[rec.phase]
+  const { t } = useT()
   return (
     <section className={`rounded-2xl p-4 ring-1 ${style.bg} ${style.ring}`}>
-      <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Recomendación estadística</h2>
+      <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{t('Recomendación estadística', 'Statistical recommendation')}</h2>
       <p className="text-base font-bold text-white">{rec.headline}</p>
 
       {rec.phase !== 'no-data' && (
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-          <Stat label="Puntuados" value={`${rec.seenCount}/${rec.plannedN}`} />
-          <Stat label="Media" value={rec.meanScore != null ? rec.meanScore.toFixed(0) : '—'} />
-          <Stat label="Mejor" value={rec.bestFlat ? rec.bestFlat.global.toFixed(0) : '—'} />
+          <Stat label={t('Puntuados', 'Scored')} value={`${rec.seenCount}/${rec.plannedN}`} />
+          <Stat label={t('Media', 'Mean')} value={rec.meanScore != null ? rec.meanScore.toFixed(0) : '—'} />
+          <Stat label={t('Mejor', 'Best')} value={rec.bestFlat ? rec.bestFlat.global.toFixed(0) : '—'} />
         </div>
       )}
 
@@ -28,13 +30,10 @@ export default function RecommendationPanel({ rec }: { rec: Recommendation }) {
       </ul>
 
       <details className="mt-3 text-xs text-slate-500">
-        <summary className="cursor-pointer">¿Cómo se calcula esto?</summary>
+        <summary className="cursor-pointer">{t('¿Cómo se calcula esto?', 'How is this calculated?')}</summary>
         <p className="mt-2 leading-relaxed">
-          Combina cuatro señales: (1) <b>puntuación ponderada</b> de tus criterios; (2) la <b>regla del 37%</b>{' '}
-          (problema de la secretaria): observa sin comprometerte durante los primeros ~37% de pisos, luego acepta el primero
-          que supere a todos los anteriores; (3) un <b>z-score</b> para ver si un piso destaca de forma significativa frente
-          al resto; y (4) <b>estadística de orden</b> para estimar la mejor puntuación que cabría esperar en los pisos que aún
-          no has visto, y así decidir si compensa seguir buscando.
+          {t('Combina cuatro señales: (1) puntuación ponderada de tus criterios; (2) la regla del 37% (problema de la secretaria): observa sin comprometerte durante los primeros ~37% de pisos, luego acepta el primero que supere a todos los anteriores; (3) un z-score para ver si un piso destaca de forma significativa frente al resto; y (4) estadística de orden para estimar la mejor puntuación que cabría esperar en los pisos que aún no has visto, y así decidir si compensa seguir buscando.',
+             'It combines four signals: (1) a weighted score from your criteria; (2) the 37% rule (secretary problem): observe without committing during the first ~37% of flats, then accept the first that beats all previous ones; (3) a z-score to see whether a flat stands out significantly from the rest; and (4) order statistics to estimate the best score you could expect among the flats you haven\'t seen yet, to decide whether it\'s worth looking further.')}
         </p>
       </details>
     </section>

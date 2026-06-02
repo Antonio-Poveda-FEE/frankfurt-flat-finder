@@ -2,18 +2,19 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store/DataContext'
 import {
-  exportVisitsIcs, formatDateKey, formatVisitTime, parseDateKey, todayKey, visitsFromFlats,
+  exportVisitsIcs, formatVisitTime, parseDateKey, todayKey, visitsFromFlats,
 } from '../lib/calendar'
 import type { VisitEvent } from '../lib/calendar'
 import { STATUS_META } from '../lib/types'
+import { useT } from '../lib/i18n'
 
 function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-function monthLabel(month: string): string {
+function monthLabel(month: string, locale: string): string {
   const [year, m] = month.split('-').map(Number)
-  return new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(new Date(year, m - 1, 1))
+  return new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(new Date(year, m - 1, 1))
 }
 
 function dateKey(d: Date): string {
@@ -49,6 +50,9 @@ function fileSafeName(value: string): string {
 
 export default function Calendar() {
   const { flats, loading } = useStore()
+  const { t, lang } = useT()
+  const locale = lang === 'en' ? 'en-GB' : 'es-ES'
+  const formatDate = (key: string) => new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(parseDateKey(key))
   const visits = useMemo(() => visitsFromFlats(flats), [flats])
   const byDate = useMemo(() => groupByDate(visits), [visits])
   const firstVisit = visits[0]?.date
@@ -83,14 +87,14 @@ export default function Calendar() {
     }
   }
 
-  if (loading) return <p className="text-slate-400">Cargando calendario…</p>
+  if (loading) return <p className="text-slate-400">{t('Cargando calendario…', 'Loading calendar…')}</p>
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-bold text-white">Calendario</h1>
-          <p className="text-sm text-slate-400">{visits.length} visita(s) con fecha guardada</p>
+          <h1 className="text-lg font-bold text-white">{t('Calendario', 'Calendar')}</h1>
+          <p className="text-sm text-slate-400">{t(`${visits.length} visita(s) con fecha guardada`, `${visits.length} visit(s) with a saved date`)}</p>
         </div>
         <button
           type="button"
@@ -98,7 +102,7 @@ export default function Calendar() {
           onClick={() => exportEvents(visits, 'visitas-pisos.ics')}
           className="rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
-          Exportar todas
+          {t('Exportar todas', 'Export all')}
         </button>
       </div>
 
@@ -106,13 +110,13 @@ export default function Calendar() {
         <div className="mb-4 flex items-center justify-between gap-2">
           <button type="button" onClick={() => setMonth(moveMonth(month, -1))}
             className="rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-300">‹</button>
-          <h2 className="text-center font-semibold capitalize text-white">{monthLabel(month)}</h2>
+          <h2 className="text-center font-semibold capitalize text-white">{monthLabel(month, locale)}</h2>
           <button type="button" onClick={() => setMonth(moveMonth(month, 1))}
             className="rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-300">›</button>
         </div>
 
         <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-medium uppercase text-slate-500">
-          {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d) => <div key={d}>{d}</div>)}
+          {(lang === 'en' ? ['M', 'T', 'W', 'T', 'F', 'S', 'S'] : ['L', 'M', 'X', 'J', 'V', 'S', 'D']).map((d, i) => <div key={i}>{d}</div>)}
         </div>
         <div className="mt-2 grid grid-cols-7 gap-1">
           {cells.map((cell) => {
@@ -148,9 +152,9 @@ export default function Calendar() {
       <section className="rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-semibold text-white">{formatDateKey(selectedDate)}</h2>
+            <h2 className="font-semibold text-white">{formatDate(selectedDate)}</h2>
             <p className="text-xs text-slate-500">
-              {selectedDateVisits.length > 0 ? `${selectedDateVisits.length} visita(s) · pulsa un piso para abrir su ficha` : 'Sin visitas en esta fecha.'}
+              {selectedDateVisits.length > 0 ? t(`${selectedDateVisits.length} visita(s) · pulsa un piso para abrir su ficha`, `${selectedDateVisits.length} visit(s) · tap a flat to open it`) : t('Sin visitas en esta fecha.', 'No visits on this date.')}
             </p>
           </div>
           <button
@@ -159,12 +163,12 @@ export default function Calendar() {
             onClick={() => exportEvents(selectedDateVisits, `visitas-${selectedDate}.ics`)}
             className="rounded-lg bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 disabled:opacity-50"
           >
-            Exportar este día
+            {t('Exportar este día', 'Export this day')}
           </button>
         </div>
 
         {selectedDateVisits.length === 0 ? (
-          <p className="rounded-lg bg-slate-950 p-4 text-sm text-slate-400">No hay visitas en esta fecha.</p>
+          <p className="rounded-lg bg-slate-950 p-4 text-sm text-slate-400">{t('No hay visitas en esta fecha.', 'No visits on this date.')}</p>
         ) : (
           <ul className="space-y-2">
             {selectedDateVisits.map((visit) => (
@@ -174,16 +178,16 @@ export default function Calendar() {
                     <span className="truncate font-semibold text-white">{visit.flat.title}</span>
                     <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
                       style={{ background: `${STATUS_META[visit.flat.status].color}22`, color: STATUS_META[visit.flat.status].color }}>
-                      {STATUS_META[visit.flat.status].label}
+                      {t(STATUS_META[visit.flat.status].label, STATUS_META[visit.flat.status].labelEn)}
                     </span>
                   </div>
-                  <p className="text-xs text-sky-300">{formatVisitTime(visit.time)}</p>
-                  <p className="truncate text-xs text-slate-400">{visit.flat.address || 'Sin dirección'}</p>
+                  <p className="text-xs text-sky-300">{visit.time ? formatVisitTime(visit.time) : t('Sin hora', 'No time')}</p>
+                  <p className="truncate text-xs text-slate-400">{visit.flat.address || t('Sin dirección', 'No address')}</p>
                 </Link>
                 <span className="shrink-0 text-lg text-slate-500">›</span>
                 <button
                   type="button"
-                  title="Exportar esta visita al calendario"
+                  title={t('Exportar esta visita al calendario', 'Export this visit to calendar')}
                   disabled={exporting}
                   onClick={() => exportEvents([visit], `visita-${visit.date}-${fileSafeName(visit.flat.title)}.ics`)}
                   className="shrink-0 rounded-lg bg-slate-800 px-2 py-1.5 text-sm text-slate-200 disabled:opacity-50"
@@ -194,7 +198,7 @@ export default function Calendar() {
         )}
         {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
         <p className="mt-3 text-[11px] text-slate-500">
-          Pulsa un piso para ver su ficha, o 📤 para añadir esa visita al Calendario (en iPhone se abre la hoja de compartir).
+          {t('Pulsa un piso para ver su ficha, o 📤 para añadir esa visita al Calendario (en iPhone se abre la hoja de compartir).', 'Tap a flat to open it, or 📤 to add that visit to your Calendar (on iPhone the share sheet opens).')}
         </p>
       </section>
     </div>

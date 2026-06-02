@@ -4,6 +4,7 @@ import { Map, Marker, useMap } from '@vis.gl/react-google-maps'
 import { FRANKFURT_CENTER } from '../lib/config'
 import { scoreColor } from '../lib/format'
 import type { Flat, Poi } from '../lib/types'
+import { useT } from '../lib/i18n'
 
 interface MapFlat { flat: Flat; score: number | null }
 
@@ -67,6 +68,7 @@ function FitBounds({ points }: { points: google.maps.LatLngLiteral[] }) {
 
 export default function FlatsMap({ flats, pois }: { flats: MapFlat[]; pois: Poi[] }) {
   const navigate = useNavigate()
+  const { t } = useT()
   const [showHoods, setShowHoods] = useState(false)
   const [satellite, setSatellite] = useState(false)
 
@@ -79,18 +81,18 @@ export default function FlatsMap({ flats, pois }: { flats: MapFlat[]; pois: Poi[
   return (
     <section className="overflow-hidden rounded-2xl bg-slate-900 ring-1 ring-slate-800">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
-        <h2 className="font-semibold text-white">Mapa de pisos</h2>
+        <h2 className="font-semibold text-white">{t('Mapa de pisos', 'Flats map')}</h2>
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => setSatellite((s) => !s)}
             className={`rounded-md px-2 py-1 text-xs ring-1 ${satellite ? 'bg-sky-500/20 text-sky-300 ring-sky-500/50' : 'bg-slate-800 text-slate-300 ring-slate-700'}`}
           >
-            🛰️ {satellite ? 'Vista mapa' : 'Satélite'}
+            🛰️ {satellite ? t('Vista mapa', 'Map view') : t('Satélite', 'Satellite')}
           </button>
           <label className="flex items-center gap-2 text-xs text-slate-300">
             <input type="checkbox" checked={showHoods} onChange={(e) => setShowHoods(e.target.checked)} className="h-4 w-4 accent-sky-500" />
-            Mostrar barrios
+            {t('Mostrar barrios', 'Show neighbourhoods')}
           </label>
         </div>
       </div>
@@ -146,7 +148,8 @@ export default function FlatsMap({ flats, pois }: { flats: MapFlat[]; pois: Poi[
       </div>
       {missing > 0 && (
         <p className="px-4 py-2 text-[11px] text-amber-400">
-          {missing} piso(s) sin coordenadas no se muestran. Edítalos y pulsa «Obtener coordenadas».
+          {t(`${missing} piso(s) sin coordenadas no se muestran. Edítalos y pulsa «Obtener coordenadas».`,
+             `${missing} flat(s) without coordinates aren't shown. Edit them and press “Get coordinates”.`)}
         </p>
       )}
     </section>

@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
-import { PHOTO_BUCKET } from '../lib/config'
+import { PHOTO_BUCKET, GUEST_EMAIL } from '../lib/config'
 import type {
   AppSettings, Criterion, Flat, FlatCosts, FlatPhoto, FlatPoiTime, Poi, Score, TravelMode,
 } from '../lib/types'
@@ -21,6 +21,7 @@ interface StoreData {
 interface StoreContextValue extends StoreData {
   session: Session | null
   email: string
+  readOnly: boolean
   loading: boolean
   reloadAll: () => Promise<void>
   // flats
@@ -68,6 +69,7 @@ function groupBy<T>(rows: T[], key: (r: T) => string): Record<string, T[]> {
 
 export function StoreProvider({ session, children }: { session: Session; children: ReactNode }) {
   const email = session.user.email ?? 'anon'
+  const readOnly = email === GUEST_EMAIL
   const [data, setData] = useState<StoreData>({
     criteria: [], pois: [], flats: [], costs: {}, photos: {}, poiTimes: {}, scores: [], settings: emptySettings,
   })
@@ -196,10 +198,10 @@ export function StoreProvider({ session, children }: { session: Session; childre
   }, [reloadAll])
 
   const value = useMemo<StoreContextValue>(() => ({
-    ...data, session, email, loading, reloadAll,
+    ...data, session, email, readOnly, loading, reloadAll,
     createFlat, updateFlat, deleteFlat, saveCosts, uploadPhotos, deletePhoto, setPrimaryPhoto, setPoiTime, bulkSetPoiTimes,
     createPoi, updatePoi, deletePoi, createCriterion, updateCriterion, deleteCriterion, setScore, saveSettings,
-  }), [data, session, email, loading, reloadAll, createFlat, updateFlat, deleteFlat, saveCosts, uploadPhotos, deletePhoto, setPrimaryPhoto, setPoiTime, bulkSetPoiTimes, createPoi, updatePoi, deletePoi, createCriterion, updateCriterion, deleteCriterion, setScore, saveSettings])
+  }), [data, session, email, readOnly, loading, reloadAll, createFlat, updateFlat, deleteFlat, saveCosts, uploadPhotos, deletePhoto, setPrimaryPhoto, setPoiTime, bulkSetPoiTimes, createPoi, updatePoi, deletePoi, createCriterion, updateCriterion, deleteCriterion, setScore, saveSettings])
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }

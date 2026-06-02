@@ -4,6 +4,7 @@ import { categoryOf, type NearbyCategory } from '../lib/places'
 import { distanceMatrix, walkingRoute, type LatLng } from '../lib/geocode'
 import type { Flat } from '../lib/types'
 import { num } from '../lib/format'
+import { useT } from '../lib/i18n'
 
 interface NearbyPlace {
   id: string
@@ -15,6 +16,7 @@ interface NearbyPlace {
 
 export default function NearbyMap({ flat, category, onClose }: { flat: Flat; category: NearbyCategory; onClose: () => void }) {
   const cat = categoryOf(category)
+  const { t } = useT()
   const origin: LatLng | null = flat.lat != null && flat.lng != null ? { lat: flat.lat, lng: flat.lng } : null
 
   const map = useMap('nearby')
@@ -74,13 +76,13 @@ export default function NearbyMap({ flat, category, onClose }: { flat: Flat; cat
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
       <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-        <h2 className="font-semibold text-white">{cat.emoji} {cat.label} cerca</h2>
-        <button onClick={onClose} className="rounded-md bg-slate-800 px-3 py-1 text-sm text-slate-200">Cerrar ✕</button>
+        <h2 className="font-semibold text-white">{cat.emoji} {t(cat.label, cat.labelEn)} {t('cerca', 'nearby')}</h2>
+        <button onClick={onClose} className="rounded-md bg-slate-800 px-3 py-1 text-sm text-slate-200">{t('Cerrar', 'Close')} ✕</button>
       </div>
 
       {!origin ? (
         <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-400">
-          Este piso no tiene coordenadas. Edítalo y pulsa «Obtener coordenadas» (o añade la dirección).
+          {t('Este piso no tiene coordenadas. Edítalo y pulsa «Obtener coordenadas» (o añade la dirección).', 'This flat has no coordinates. Edit it and press “Get coordinates” (or add the address).')}
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
@@ -110,10 +112,10 @@ export default function NearbyMap({ flat, category, onClose }: { flat: Flat; cat
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-            {status === 'loading' && <p className="text-sm text-slate-400">Buscando sitios cercanos…</p>}
-            {status === 'empty' && <p className="text-sm text-slate-400">No se han encontrado sitios de esta categoría cerca.</p>}
+            {status === 'loading' && <p className="text-sm text-slate-400">{t('Buscando sitios cercanos…', 'Searching nearby places…')}</p>}
+            {status === 'empty' && <p className="text-sm text-slate-400">{t('No se han encontrado sitios de esta categoría cerca.', 'No places of this category found nearby.')}</p>}
             {selectedPlace?.walkMin != null && (
-              <p className="mb-2 text-sm text-sky-300">🚶 {selectedPlace.name}: {selectedPlace.walkMin} min andando</p>
+              <p className="mb-2 text-sm text-sky-300">🚶 {selectedPlace.name}: {selectedPlace.walkMin} {t('min andando', 'min walking')}</p>
             )}
             <ul className="space-y-1.5">
               {places.map((p) => (
@@ -127,7 +129,7 @@ export default function NearbyMap({ flat, category, onClose }: { flat: Flat; cat
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-[11px] text-slate-500">Pulsa un sitio para ver la ruta andando en el mapa.</p>
+            <p className="mt-3 text-[11px] text-slate-500">{t('Pulsa un sitio para ver la ruta andando en el mapa.', 'Tap a place to see the walking route on the map.')}</p>
           </div>
         </div>
       )}

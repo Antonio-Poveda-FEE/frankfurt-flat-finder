@@ -1,5 +1,6 @@
 import type { Criterion, Score, Flat, AppSettings, FlatCosts } from './types'
 import { monthlyTotal } from './costs'
+import { tr, type Lang } from './i18n'
 
 // ───────────────────────────── Weighted scoring ─────────────────────────────
 
@@ -208,7 +209,8 @@ export interface Recommendation {
 export function buildRecommendation(
   flats: Flat[],
   scoreMap: Map<string, { global: number | null }>,
-  settings: AppSettings
+  settings: AppSettings,
+  lang: Lang = 'es'
 ): Recommendation {
   // The "seen" sequence: scored flats, in the order they were evaluated.
   const seen: SeenFlat[] = flats
@@ -240,8 +242,8 @@ export function buildRecommendation(
     expectedBestRemaining: null,
     expectedGain: null,
     worthSeeingMore: true,
-    headline: 'Aún no hay pisos puntuados.',
-    bullets: ['Añade y puntúa al menos un piso para empezar a recibir recomendaciones.'],
+    headline: tr(lang, 'Aún no hay pisos puntuados.', 'No flats scored yet.'),
+    bullets: [tr(lang, 'Añade y puntúa al menos un piso para empezar a recibir recomendaciones.', 'Add and score at least one flat to start getting recommendations.')],
   }
 
   if (seenCount === 0) return base
@@ -276,58 +278,61 @@ export function buildRecommendation(
     remaining > 0 && (expectedGain == null || expectedGain >= settings.improvement_threshold)
 
   // ── Natural-language verdict ──
+  const title = bestFlat.flat.title
   const bullets: string[] = []
-  bullets.push(
-    `Has puntuado ${seenCount} de ~${settings.planned_visits} pisos planeados. ` +
-      `Fase de exploración recomendada: los primeros ${explorationCount} (~regla del 37%).`
-  )
-  bullets.push(
-    `Mejor piso hasta ahora: «${bestFlat.flat.title}» con ${bestFlat.global.toFixed(0)}/100. ` +
-      `Media ${m.toFixed(0)}, desviación ${sd.toFixed(0)}.`
-  )
+  bullets.push(tr(lang,
+    `Has puntuado ${seenCount} de ~${settings.planned_visits} pisos planeados. Fase de exploración recomendada: los primeros ${explorationCount} (~regla del 37%).`,
+    `You've scored ${seenCount} of ~${settings.planned_visits} planned flats. Recommended exploration phase: the first ${explorationCount} (~37% rule).`
+  ))
+  bullets.push(tr(lang,
+    `Mejor piso hasta ahora: «${title}» con ${bestFlat.global.toFixed(0)}/100. Media ${m.toFixed(0)}, desviación ${sd.toFixed(0)}.`,
+    `Best flat so far: “${title}” with ${bestFlat.global.toFixed(0)}/100. Mean ${m.toFixed(0)}, std dev ${sd.toFixed(0)}.`
+  ))
   if (bestZ != null) {
-    bullets.push(
-      bestIsSignificant
-        ? `Destaca de forma significativa (z = ${bestZ.toFixed(2)} ≥ ${settings.significance_k}): está claramente por encima del resto.`
-        : `No despunta estadísticamente todavía (z = ${bestZ.toFixed(2)} < ${settings.significance_k}): es bueno pero no sobresale del grupo.`
-    )
+    bullets.push(bestIsSignificant
+      ? tr(lang,
+          `Destaca de forma significativa (z = ${bestZ.toFixed(2)} ≥ ${settings.significance_k}): está claramente por encima del resto.`,
+          `It stands out significantly (z = ${bestZ.toFixed(2)} ≥ ${settings.significance_k}): clearly above the rest.`)
+      : tr(lang,
+          `No despunta estadísticamente todavía (z = ${bestZ.toFixed(2)} < ${settings.significance_k}): es bueno pero no sobresale del grupo.`,
+          `Not statistically outstanding yet (z = ${bestZ.toFixed(2)} < ${settings.significance_k}): good but not above the group.`))
   }
   if (expectedBestRemaining != null && expectedGain != null) {
-    bullets.push(
-      `Si visitas los ${remaining} pisos restantes, el mejor esperado rondaría ${expectedBestRemaining.toFixed(0)}/100 ` +
-        `(${expectedGain >= 0 ? '+' : ''}${expectedGain.toFixed(0)} vs. tu mejor actual).`
-    )
+    bullets.push(tr(lang,
+      `Si visitas los ${remaining} pisos restantes, el mejor esperado rondaría ${expectedBestRemaining.toFixed(0)}/100 (${expectedGain >= 0 ? '+' : ''}${expectedGain.toFixed(0)} vs. tu mejor actual).`,
+      `If you visit the remaining ${remaining} flats, the expected best would be around ${expectedBestRemaining.toFixed(0)}/100 (${expectedGain >= 0 ? '+' : ''}${expectedGain.toFixed(0)} vs. your current best).`
+    ))
   } else if (remaining === 0) {
-    bullets.push('Ya has alcanzado el número de visitas planeado: toca decidir.')
+    bullets.push(tr(lang, 'Ya has alcanzado el número de visitas planeado: toca decidir.', 'You have reached your planned number of visits: time to decide.'))
   }
 
   let headline: string
   if (phase === 'exploration') {
-    headline = `🔍 Fase de exploración: sigue visitando (aún no deberías comprometerte).`
-    bullets.push(
-      `Estás dentro de los primeros ${explorationCount} pisos. Aunque alguno te encante, ` +
-        `lo óptimo es seguir mirando para calibrar el mercado antes de decidir.`
-    )
+    headline = tr(lang, '🔍 Fase de exploración: sigue visitando (aún no deberías comprometerte).', '🔍 Exploration phase: keep visiting (you shouldn\'t commit yet).')
+    bullets.push(tr(lang,
+      `Estás dentro de los primeros ${explorationCount} pisos. Aunque alguno te encante, lo óptimo es seguir mirando para calibrar el mercado antes de decidir.`,
+      `You're within the first ${explorationCount} flats. Even if you love one, the optimal move is to keep looking to calibrate the market before deciding.`
+    ))
   } else if (acceptCandidate) {
-    headline = `✅ Decide ya: «${acceptCandidate.flat.title}» supera tu listón de referencia.`
-    bullets.push(
-      `Estás en fase de decisión y «${acceptCandidate.flat.title}» (${acceptCandidate.global.toFixed(0)}/100) ` +
-        `supera el mejor de la fase de exploración (${benchmark?.toFixed(0)}). La estrategia de parada óptima dice: ofértalo.`
-    )
+    headline = tr(lang, `✅ Decide ya: «${acceptCandidate.flat.title}» supera tu listón de referencia.`, `✅ Decide now: “${acceptCandidate.flat.title}” beats your benchmark.`)
+    bullets.push(tr(lang,
+      `Estás en fase de decisión y «${acceptCandidate.flat.title}» (${acceptCandidate.global.toFixed(0)}/100) supera el mejor de la fase de exploración (${benchmark?.toFixed(0)}). La estrategia de parada óptima dice: ofértalo.`,
+      `You're in the decision phase and “${acceptCandidate.flat.title}” (${acceptCandidate.global.toFixed(0)}/100) beats the best of the exploration phase (${benchmark?.toFixed(0)}). The optimal-stopping strategy says: go for it.`
+    ))
   } else if (worthSeeingMore) {
-    headline = `⏳ Aún merece la pena ver más pisos.`
-    bullets.push(
-      `Ningún piso ha superado claramente tu listón y estadísticamente podrías encontrar algo mejor ` +
-        `(mejora esperada ≥ ${settings.improvement_threshold} pts). Sigue buscando salvo que aparezca un favorito claro.`
-    )
+    headline = tr(lang, '⏳ Aún merece la pena ver más pisos.', '⏳ It\'s still worth seeing more flats.')
+    bullets.push(tr(lang,
+      `Ningún piso ha superado claramente tu listón y estadísticamente podrías encontrar algo mejor (mejora esperada ≥ ${settings.improvement_threshold} pts). Sigue buscando salvo que aparezca un favorito claro.`,
+      `No flat has clearly beaten your benchmark and statistically you could find something better (expected improvement ≥ ${settings.improvement_threshold} pts). Keep looking unless a clear favourite appears.`
+    ))
   } else {
     headline = bestIsSignificant
-      ? `✅ «${bestFlat.flat.title}» es tu mejor opción: quédatelo.`
-      : `🤔 Rendimiento decreciente: probablemente debas decidir entre lo que ya tienes.`
-    bullets.push(
-      `La mejora esperada por seguir buscando (${expectedGain != null ? expectedGain.toFixed(0) : '—'} pts) ` +
-        `no compensa. Lo razonable es decidir entre los pisos actuales.`
-    )
+      ? tr(lang, `✅ «${title}» es tu mejor opción: quédatelo.`, `✅ “${title}” is your best option: take it.`)
+      : tr(lang, '🤔 Rendimiento decreciente: probablemente debas decidir entre lo que ya tienes.', '🤔 Diminishing returns: you should probably decide among what you already have.')
+    bullets.push(tr(lang,
+      `La mejora esperada por seguir buscando (${expectedGain != null ? expectedGain.toFixed(0) : '—'} pts) no compensa. Lo razonable es decidir entre los pisos actuales.`,
+      `The expected improvement from looking further (${expectedGain != null ? expectedGain.toFixed(0) : '—'} pts) isn't worth it. The sensible move is to decide among the current flats.`
+    ))
   }
 
   return {

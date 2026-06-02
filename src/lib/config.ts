@@ -9,6 +9,10 @@ export const SUPABASE_KEY =
 
 export const PHOTO_BUCKET = 'flat-photos'
 
+// Read-only guest account: can view everything but RLS blocks all writes.
+export const GUEST_EMAIL = 'guest@flatfinder.local'
+export const GUEST_PASSWORD = 'invitado'
+
 // Google Maps Platform key. Must be restricted by HTTP referrer + API in the
 // Google Cloud console (it necessarily ships in the client bundle). When empty,
 // the app degrades gracefully: maps are replaced by external Google Maps links.

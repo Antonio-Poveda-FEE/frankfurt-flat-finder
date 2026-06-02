@@ -10,15 +10,17 @@ import { eur, scoreColor } from '../lib/format'
 import RecommendationPanel from '../components/RecommendationPanel'
 import FlatsMap from '../components/FlatsMap'
 import { hasMaps } from '../lib/config'
+import { useT } from '../lib/i18n'
 
 const RADAR_COLORS = ['#38bdf8', '#f59e0b', '#34d399', '#f472b6', '#a78bfa']
 
 export default function Compare() {
   const { flats, scores, criteria, costs, settings, pois, loading } = useStore()
+  const { t, lang } = useT()
   const qualityMap = useMemo(() => computeFlatScores(criteria, scores), [criteria, scores])
   const scoreMap = useMemo(() => computeGlobalScores(flats, costs, criteria, scores, settings), [flats, costs, criteria, scores, settings])
   const mapFlats = useMemo(() => flats.map((f) => ({ flat: f, score: scoreMap.get(f.id)?.global ?? null })), [flats, scoreMap])
-  const rec = useMemo(() => buildRecommendation(flats, scoreMap, settings), [flats, scoreMap, settings])
+  const rec = useMemo(() => buildRecommendation(flats, scoreMap, settings, lang), [flats, scoreMap, settings, lang])
 
   const ranked = useMemo(() =>
     flats
@@ -45,7 +47,7 @@ export default function Compare() {
     })
   }, [criteria, effectiveSelected, flats, qualityMap])
 
-  if (loading) return <p className="text-slate-400">Cargando…</p>
+  if (loading) return <p className="text-slate-400">{t('Cargando…', 'Loading…')}</p>
 
   return (
     <div className="space-y-5">
@@ -55,13 +57,13 @@ export default function Compare() {
 
       {ranked.length === 0 ? (
         <p className="rounded-2xl bg-slate-900 p-6 text-center text-slate-400 ring-1 ring-slate-800">
-          Puntúa algunos pisos para ver el ranking y el comparador.
+          {t('Puntúa algunos pisos para ver el ranking y el comparador.', 'Score some flats to see the ranking and comparison.')}
         </p>
       ) : (
         <>
           {/* Ranking table */}
           <section className="overflow-hidden rounded-2xl bg-slate-900 ring-1 ring-slate-800">
-            <h2 className="border-b border-slate-800 px-4 py-3 font-semibold text-white">Ranking</h2>
+            <h2 className="border-b border-slate-800 px-4 py-3 font-semibold text-white">{t('Ranking', 'Ranking')}</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-[11px] uppercase text-slate-500">
@@ -69,10 +71,10 @@ export default function Compare() {
                     <th className="px-3 py-2 text-left">#</th>
                     <th className="px-1 py-2 text-left">Piso</th>
                     <th className="px-2 py-2 text-right">€/mes</th>
-                    <th className="px-2 py-2 text-right" title="Calidad: media ponderada de criterios">Cal.</th>
-                    <th className="px-2 py-2 text-right" title="Valor: calidad por euro (relación calidad-precio)">Valor</th>
-                    <th className="px-3 py-2 text-right" title="Nota global: calidad + precio">Global</th>
-                    <th className="px-2 py-2 text-center">Radar</th>
+                    <th className="px-2 py-2 text-right" title={t('Calidad: media ponderada de criterios', 'Quality: weighted average of criteria')}>{t('Cal.', 'Qual.')}</th>
+                    <th className="px-2 py-2 text-right" title={t('Valor: calidad por euro (relación calidad-precio)', 'Value: quality per euro (value for money)')}>{t('Valor', 'Value')}</th>
+                    <th className="px-3 py-2 text-right" title={t('Nota global: calidad + precio', 'Global score: quality + price')}>{t('Global', 'Global')}</th>
+                    <th className="px-2 py-2 text-center">{t('Radar', 'Radar')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -100,14 +102,15 @@ export default function Compare() {
               </table>
             </div>
             <p className="px-4 py-2 text-[11px] text-slate-500">
-              <b>Cal.</b> = calidad (criterios) · <b>Valor</b> = calidad por euro (relación calidad-precio) · <b>Global</b> = calidad + precio (peso del precio en Ajustes). Marca hasta 5 pisos para el radar.
+              {t('Cal. = calidad (criterios) · Valor = calidad por euro (relación calidad-precio) · Global = calidad + precio (peso del precio en Ajustes). Marca hasta 5 pisos para el radar.',
+                 'Qual. = quality (criteria) · Value = quality per euro (value for money) · Global = quality + price (price weight in Settings). Tick up to 5 flats for the radar.')}
             </p>
           </section>
 
           {/* Radar */}
           {effectiveSelected.length > 0 && (
             <section className="rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
-              <h2 className="mb-2 font-semibold text-white">Comparativa por criterio (calidad)</h2>
+              <h2 className="mb-2 font-semibold text-white">{t('Comparativa por criterio (calidad)', 'Comparison by criterion (quality)')}</h2>
               <div className="h-96">
                 <ResponsiveContainer width="100%" height="100%">
                   <RadarChart data={radarData} outerRadius="70%">

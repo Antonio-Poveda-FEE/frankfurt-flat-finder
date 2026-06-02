@@ -91,28 +91,28 @@ export interface AppSettings {
   price_weight: number
 }
 
-export const COST_FIELDS: { key: keyof Omit<FlatCosts, 'flat_id'>; label: string; recurring: boolean }[] = [
-  { key: 'kaltmiete', label: 'Alquiler base (Kaltmiete)', recurring: true },
-  { key: 'nebenkosten', label: 'Gastos comunes (Nebenkosten)', recurring: true },
-  { key: 'heating', label: 'Calefacción', recurring: true },
-  { key: 'internet', label: 'Internet', recurring: true },
-  { key: 'electricity', label: 'Luz', recurring: true },
-  { key: 'water', label: 'Agua', recurring: true },
-  { key: 'garage', label: 'Garaje / plaza', recurring: true },
-  { key: 'other', label: 'Otros mensuales', recurring: true },
-  { key: 'deposit', label: 'Fianza (una vez)', recurring: false },
+export const COST_FIELDS: { key: keyof Omit<FlatCosts, 'flat_id'>; label: string; labelEn: string; recurring: boolean }[] = [
+  { key: 'kaltmiete', label: 'Alquiler base (Kaltmiete)', labelEn: 'Base rent (Kaltmiete)', recurring: true },
+  { key: 'nebenkosten', label: 'Gastos comunes (Nebenkosten)', labelEn: 'Service charges (Nebenkosten)', recurring: true },
+  { key: 'heating', label: 'Calefacción', labelEn: 'Heating', recurring: true },
+  { key: 'internet', label: 'Internet', labelEn: 'Internet', recurring: true },
+  { key: 'electricity', label: 'Luz', labelEn: 'Electricity', recurring: true },
+  { key: 'water', label: 'Agua', labelEn: 'Water', recurring: true },
+  { key: 'garage', label: 'Garaje / plaza', labelEn: 'Garage / parking', recurring: true },
+  { key: 'other', label: 'Otros mensuales', labelEn: 'Other monthly', recurring: true },
+  { key: 'deposit', label: 'Fianza (una vez)', labelEn: 'Deposit (one-off)', recurring: false },
 ]
 
-export const STATUS_META: Record<FlatStatus, { label: string; color: string }> = {
-  candidate: { label: 'Candidato', color: '#64748b' },
-  visited: { label: 'Visitado', color: '#3b82f6' },
-  favorite: { label: 'Favorito', color: '#f59e0b' },
-  rejected: { label: 'Descartado', color: '#ef4444' },
+export const STATUS_META: Record<FlatStatus, { label: string; labelEn: string; color: string }> = {
+  candidate: { label: 'Candidato', labelEn: 'Candidate', color: '#64748b' },
+  visited: { label: 'Visitado', labelEn: 'Visited', color: '#3b82f6' },
+  favorite: { label: 'Favorito', labelEn: 'Favorite', color: '#f59e0b' },
+  rejected: { label: 'Descartado', labelEn: 'Rejected', color: '#ef4444' },
 }
 
-export const TRAVEL_MODES: { mode: TravelMode; label: string; emoji: string; gmaps: string }[] = [
-  { mode: 'walk', label: 'Andando', emoji: '🚶', gmaps: 'walking' },
-  { mode: 'bike', label: 'Bici', emoji: '🚲', gmaps: 'bicycling' },
-  { mode: 'transit', label: 'Metro/Bus', emoji: '🚇', gmaps: 'transit' },
-  { mode: 'drive', label: 'Coche', emoji: '🚗', gmaps: 'driving' },
+export const TRAVEL_MODES: { mode: TravelMode; label: string; labelEn: string; emoji: string; gmaps: string }[] = [
+  { mode: 'walk', label: 'Andando', labelEn: 'Walking', emoji: '🚶', gmaps: 'walking' },
+  { mode: 'bike', label: 'Bici', labelEn: 'Cycling', emoji: '🚲', gmaps: 'bicycling' },
+  { mode: 'transit', label: 'Metro/Bus', labelEn: 'Transit', emoji: '🚇', gmaps: 'transit' },
+  { mode: 'drive', label: 'Coche', labelEn: 'Driving', emoji: '🚗', gmaps: 'driving' },
 ]

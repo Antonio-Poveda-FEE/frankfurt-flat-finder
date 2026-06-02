@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../store/DataContext'
 import { scoreColor } from '../lib/format'
+import { useT } from '../lib/i18n'
 
 const fmt = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1))
 
 /** Per-criterion sliders for the logged-in user, plus a peek at others' ratings. */
 export default function ScoreEditor({ flatId }: { flatId: string }) {
-  const { criteria, scores, email, setScore } = useStore()
+  const { criteria, scores, email, setScore, readOnly } = useStore()
+  const { t } = useT()
   // Live values while dragging — committed to the DB only on release (smooth drag).
   const [draft, setDraft] = useState<Record<string, number>>({})
 
@@ -36,7 +38,7 @@ export default function ScoreEditor({ flatId }: { flatId: string }) {
 
   return (
     <div className="space-y-5">
-      <p className="text-xs text-slate-500">Tu puntuación (1–10, en pasos de 0,5). La nota global combina las notas de todas las personas y el precio.</p>
+      <p className="text-xs text-slate-500">{t('Tu puntuación (1–10, en pasos de 0,5). La nota global combina las notas de todas las personas y el precio.', 'Your rating (1–10, in 0.5 steps). The global score combines everyone\'s ratings and the price.')}</p>
       {categories.map((cat) => (
         <div key={cat} className="space-y-3">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{cat}</h3>
@@ -55,11 +57,12 @@ export default function ScoreEditor({ flatId }: { flatId: string }) {
                 </div>
                 <input
                   type="range" min={1} max={c.scale_max} step={0.5} value={sliderVal}
+                  disabled={readOnly}
                   onChange={(e) => setDraft((d) => ({ ...d, [c.id]: Number(e.target.value) }))}
                   onPointerUp={() => commit(c.id)}
                   onTouchEnd={() => commit(c.id)}
                   onKeyUp={() => commit(c.id)}
-                  className="w-full touch-none"
+                  className="w-full touch-none disabled:opacity-60"
                 />
                 {entry && entry.others.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-400">

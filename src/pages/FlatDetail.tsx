@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMapsLibrary } from '@vis.gl/react-google-maps'
 import { useStore } from '../store/DataContext'
-import { computeFlatScores } from '../lib/stats'
+import { computeGlobalScores } from '../lib/stats'
 import { monthlyTotal, pricePerM2 } from '../lib/costs'
 import { eur, eur2, num, scoreColor } from '../lib/format'
 import { photoUrl } from '../lib/supabase'
@@ -18,14 +18,14 @@ import NearbyMap from '../components/NearbyMap'
 export default function FlatDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { flats, costs, photos, pois, poiTimes, criteria, scores, setPoiTime, bulkSetPoiTimes, deleteFlat } = useStore()
+  const { flats, costs, photos, pois, poiTimes, criteria, scores, settings, setPoiTime, bulkSetPoiTimes, deleteFlat } = useStore()
   const flat = flats.find((f) => f.id === id)
   const routesLib = useMapsLibrary('routes')
   const [nearbyCat, setNearbyCat] = useState<NearbyCategory | null>(null)
   const [calculating, setCalculating] = useState(false)
   const autoTried = useRef<string | null>(null)
 
-  const scoreMap = useMemo(() => computeFlatScores(criteria, scores), [criteria, scores])
+  const scoreMap = useMemo(() => computeGlobalScores(flats, costs, criteria, scores, settings), [flats, costs, criteria, scores, settings])
 
   const times = flat ? (poiTimes[flat.id] ?? []) : []
   const poisWithCoords = pois.filter((p) => p.lat != null && p.lng != null)

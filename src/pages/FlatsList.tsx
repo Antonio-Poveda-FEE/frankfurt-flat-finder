@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store/DataContext'
-import { computeFlatScores } from '../lib/stats'
+import { computeFlatScores, computeGlobalScores } from '../lib/stats'
 import { monthlyTotal, pricePerM2 } from '../lib/costs'
 import { eur, num, scoreColor } from '../lib/format'
 import { photoUrl } from '../lib/supabase'
@@ -11,11 +11,12 @@ import type { FlatStatus } from '../lib/types'
 type SortKey = 'score' | 'price' | 'recent'
 
 export default function FlatsList() {
-  const { flats, scores, criteria, costs, photos, loading } = useStore()
+  const { flats, scores, criteria, costs, photos, settings, loading } = useStore()
   const [sort, setSort] = useState<SortKey>('score')
   const [filter, setFilter] = useState<FlatStatus | 'all'>('all')
 
-  const scoreMap = useMemo(() => computeFlatScores(criteria, scores), [criteria, scores])
+  const qualityMap = useMemo(() => computeFlatScores(criteria, scores), [criteria, scores])
+  const scoreMap = useMemo(() => computeGlobalScores(flats, costs, criteria, scores, settings), [flats, costs, criteria, scores, settings])
   const bestId = useMemo(() => {
     let best: { id: string; g: number } | null = null
     for (const f of flats) {
@@ -31,7 +32,7 @@ export default function FlatsList() {
       .map((f) => ({
         flat: f,
         score: scoreMap.get(f.id)?.global ?? null,
-        rated: scoreMap.get(f.id)?.ratedCriteria ?? 0,
+        rated: qualityMap.get(f.id)?.ratedCriteria ?? 0,
         total: monthlyTotal(costs[f.id]),
         ppm2: pricePerM2(costs[f.id], f.size_m2),
         cover: coverPhoto(photos[f.id]),
@@ -42,7 +43,7 @@ export default function FlatsList() {
       return (b.score ?? -1) - (a.score ?? -1)
     })
     return list
-  }, [flats, filter, sort, scoreMap, costs, photos])
+  }, [flats, filter, sort, scoreMap, qualityMap, costs, photos])
 
   if (loading) return <p className="text-slate-400">Cargando pisos…</p>
 

@@ -12,6 +12,7 @@ export default function Settings() {
   // POI form
   const [poiLabel, setPoiLabel] = useState('')
   const [poiAddr, setPoiAddr] = useState('')
+  const [poiEmoji, setPoiEmoji] = useState('📍')
 
   // Criterion form
   const [critName, setCritName] = useState('')
@@ -22,10 +23,12 @@ export default function Settings() {
   const [n, setN] = useState(settings.planned_visits.toString())
   const [k, setK] = useState(settings.significance_k.toString())
   const [thr, setThr] = useState(settings.improvement_threshold.toString())
+  const [pw, setPw] = useState(settings.price_weight.toString())
   useEffect(() => {
     setN(settings.planned_visits.toString())
     setK(settings.significance_k.toString())
     setThr(settings.improvement_threshold.toString())
+    setPw(settings.price_weight.toString())
   }, [settings])
 
   const input = 'rounded-lg bg-slate-800 px-3 py-2 text-white text-sm outline-none ring-1 ring-slate-700 focus:ring-sky-500'
@@ -37,7 +40,7 @@ export default function Settings() {
       {/* Statistical parameters */}
       <section className="space-y-3 rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
         <h2 className="font-semibold text-white">Parámetros de decisión</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <label className="block">
             <span className="mb-1 block text-xs text-slate-400">Pisos que planeáis ver (N)</span>
             <input className={`w-full ${input}`} inputMode="numeric" value={n} onChange={(e) => setN(e.target.value)} />
@@ -50,17 +53,23 @@ export default function Settings() {
             <span className="mb-1 block text-xs text-slate-400">Mejora mínima para seguir (pts)</span>
             <input className={`w-full ${input}`} inputMode="decimal" value={thr} onChange={(e) => setThr(e.target.value)} />
           </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-slate-400">Peso del precio</span>
+            <input className={`w-full ${input}`} inputMode="decimal" value={pw} onChange={(e) => setPw(e.target.value)} />
+          </label>
         </div>
         <button
           onClick={() => saveSettings({
             planned_visits: Math.max(1, parseInt(n) || 1),
             significance_k: parseFloat(k) || 0,
             improvement_threshold: parseFloat(thr) || 0,
+            price_weight: Math.max(0, parseFloat(pw) || 0),
           })}
           className="rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-white">Guardar parámetros</button>
         <p className="text-[11px] text-slate-500">
           N alimenta la regla del 37%. k define cuánto debe destacar un piso (z-score) para considerarse claramente mejor.
-          La mejora mínima decide cuándo dejar de buscar.
+          La mejora mínima decide cuándo dejar de buscar. El <b>peso del precio</b> es cuánto pesa el coste mensual en la nota
+          global (en la misma escala que los pesos de los criterios; 0 = ignorar el precio).
         </p>
       </section>
 
@@ -71,13 +80,17 @@ export default function Settings() {
         <ul className="space-y-2">
           {pois.map((p) => (
             <li key={p.id} className="flex items-center justify-between rounded-lg bg-slate-800/60 px-3 py-2 text-sm">
-              <div><span className="text-slate-100">{p.label}</span>{p.address && <span className="block text-xs text-slate-500">{p.address}</span>}</div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{p.emoji || '📍'}</span>
+                <div><span className="text-slate-100">{p.label}</span>{p.address && <span className="block text-xs text-slate-500">{p.address}</span>}</div>
+              </div>
               <button onClick={() => deletePoi(p.id)} className="text-xs text-red-400">Eliminar</button>
             </li>
           ))}
           {pois.length === 0 && <li className="text-sm text-slate-500">Aún no hay puntos de interés.</li>}
         </ul>
         <div className="flex flex-col gap-2 sm:flex-row">
+          <input className={`w-16 text-center text-lg ${input}`} maxLength={4} aria-label="Emoji" value={poiEmoji} onChange={(e) => setPoiEmoji(e.target.value)} />
           <input className={`flex-1 ${input}`} placeholder="Nombre (p.ej. Trabajo de Toni)" value={poiLabel} onChange={(e) => setPoiLabel(e.target.value)} />
           <input className={`flex-1 ${input}`} placeholder="Dirección" value={poiAddr} onChange={(e) => setPoiAddr(e.target.value)} />
           <button
@@ -86,10 +99,15 @@ export default function Settings() {
               const addr = poiAddr.trim()
               let coords: { lat: number; lng: number } | null = null
               if (geocode && addr) coords = await geocode(addr)
-              await createPoi({ label: poiLabel.trim(), address: addr || null, lat: coords?.lat ?? null, lng: coords?.lng ?? null })
-              setPoiLabel(''); setPoiAddr('')
+              await createPoi({ label: poiLabel.trim(), address: addr || null, emoji: poiEmoji.trim() || '📍', lat: coords?.lat ?? null, lng: coords?.lng ?? null })
+              setPoiLabel(''); setPoiAddr(''); setPoiEmoji('📍')
             }}
             className="rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Añadir</button>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {['🏢','💼','🏋️','🏙️','🚉','🏥','🎓','🛒','👨‍👩‍👧','🌳'].map((e) => (
+            <button key={e} type="button" onClick={() => setPoiEmoji(e)} className="rounded bg-slate-800 px-2 py-1 text-lg hover:bg-slate-700">{e}</button>
+          ))}
         </div>
       </section>
 
@@ -122,7 +140,7 @@ export default function Settings() {
             disabled={!critName.trim()}
             onClick={async () => {
               const maxOrder = criteria.reduce((m, c) => Math.max(m, c.sort_order), 0)
-              await createCriterion({ name: critName.trim(), category: critCat, weight: parseFloat(critWeight) || 1, scale_max: 5, sort_order: maxOrder + 10 })
+              await createCriterion({ name: critName.trim(), category: critCat, weight: parseFloat(critWeight) || 1, scale_max: 10, sort_order: maxOrder + 10 })
               setCritName(''); setCritWeight('1')
             }}
             className="rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Añadir</button>

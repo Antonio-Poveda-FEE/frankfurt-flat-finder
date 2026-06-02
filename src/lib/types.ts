@@ -16,6 +16,7 @@ export interface Poi {
   address: string | null
   lat: number | null
   lng: number | null
+  emoji: string | null
 }
 
 export interface Flat {
@@ -87,6 +88,7 @@ export interface AppSettings {
   planned_visits: number
   significance_k: number
   improvement_threshold: number
+  price_weight: number
 }
 
 export const COST_FIELDS: { key: keyof Omit<FlatCosts, 'flat_id'>; label: string; recurring: boolean }[] = [

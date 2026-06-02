@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Map, Marker, InfoWindow, useMap } from '@vis.gl/react-google-maps'
+import { Map, Marker, useMap } from '@vis.gl/react-google-maps'
 import { FRANKFURT_CENTER } from '../lib/config'
 import { scoreColor } from '../lib/format'
 import type { Flat, Poi } from '../lib/types'
@@ -72,10 +72,8 @@ export default function FlatsMap({ flats, pois }: { flats: MapFlat[]; pois: Poi[
 
   const located = flats.filter((f) => f.flat.lat != null && f.flat.lng != null)
   const locatedPois = pois.filter((p) => p.lat != null && p.lng != null)
-  const points: google.maps.LatLngLiteral[] = [
-    ...located.map((f) => ({ lat: f.flat.lat!, lng: f.flat.lng! })),
-    ...locatedPois.map((p) => ({ lat: p.lat!, lng: p.lng! })),
-  ]
+  // Fit the map to the flats only (so they're all visible) — POIs may sit outside.
+  const flatPoints: google.maps.LatLngLiteral[] = located.map((f) => ({ lat: f.flat.lat!, lng: f.flat.lng! }))
   const missing = flats.length - located.length
 
   return (
@@ -96,7 +94,7 @@ export default function FlatsMap({ flats, pois }: { flats: MapFlat[]; pois: Poi[
           </label>
         </div>
       </div>
-      <div className="h-80 w-full">
+      <div className="h-[40rem] w-full">
         <Map
           id="compare"
           defaultCenter={FRANKFURT_CENTER}
@@ -112,7 +110,7 @@ export default function FlatsMap({ flats, pois }: { flats: MapFlat[]; pois: Poi[
           zoomControl={true}
           style={{ width: '100%', height: '100%' }}
         >
-          <FitBounds points={points} />
+          <FitBounds points={flatPoints} />
           <Neighbourhoods show={showHoods} />
 
           {located.map(({ flat, score }) => (
@@ -135,9 +133,14 @@ export default function FlatsMap({ flats, pois }: { flats: MapFlat[]; pois: Poi[
           ))}
 
           {locatedPois.map((p) => (
-            <InfoWindow key={p.id} position={{ lat: p.lat!, lng: p.lng! }} headerDisabled disableAutoPan pixelOffset={[0, -6]}>
-              <span style={{ color: '#0f172a', fontSize: 12, fontWeight: 600 }}>📌 {p.label}</span>
-            </InfoWindow>
+            <Marker
+              key={p.id}
+              position={{ lat: p.lat!, lng: p.lng! }}
+              title={p.label}
+              zIndex={4}
+              icon={{ path: google.maps.SymbolPath.CIRCLE, scale: 0, fillOpacity: 0, strokeOpacity: 0 }}
+              label={{ text: p.emoji || '📍', fontSize: '24px' }}
+            />
           ))}
         </Map>
       </div>

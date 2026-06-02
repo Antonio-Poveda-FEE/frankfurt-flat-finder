@@ -1,4 +1,5 @@
-import type { Criterion, Score, Flat, AppSettings } from './types'
+import type { Criterion, Score, Flat, AppSettings, FlatCosts } from './types'
+import { monthlyTotal } from './costs'
 
 // ───────────────────────────── Weighted scoring ─────────────────────────────
 
@@ -56,6 +57,64 @@ export function computeFlatScores(criteria: Criterion[], scores: Score[]): Map<s
       perCriterion,
       perCriterion100,
     })
+  }
+  return out
+}
+
+// ───────────────────────────── Global score (quality + price) ───────────────
+
+export interface GlobalScore {
+  /** Weighted criteria score, 0..100 (quality only, price excluded). */
+  quality: number | null
+  /** Relative price score across flats, 0..100 (cheaper = higher). */
+  priceScore: number | null
+  /** Relative value-for-money (quality per euro), 0..100 (higher = better deal). */
+  valueScore: number | null
+  /** Final score combining quality with the price weight, 0..100. */
+  global: number | null
+}
+
+/**
+ * Combines the per-criterion quality with the flat price. Price is normalised
+ * relative to the other flats (cheapest = 100) and folded into the global score
+ * with `settings.price_weight` (on the same scale as criteria weights).
+ * Value-for-money (quality per euro) is reported separately for the comparator.
+ */
+export function computeGlobalScores(
+  flats: Flat[],
+  costs: Record<string, FlatCosts>,
+  criteria: Criterion[],
+  scores: Score[],
+  settings: AppSettings
+): Map<string, GlobalScore> {
+  const quality = computeFlatScores(criteria, scores)
+  const totalCritWeight = criteria.reduce((s, c) => s + c.weight, 0) || 1
+  const Wp = Math.max(0, settings.price_weight ?? 0)
+
+  const prices = flats.map((f) => monthlyTotal(costs[f.id])).filter((p) => p > 0)
+  const minP = prices.length ? Math.min(...prices) : 0
+  const maxP = prices.length ? Math.max(...prices) : 0
+
+  const valueRaws = new Map<string, number>()
+  for (const f of flats) {
+    const q = quality.get(f.id)?.global
+    const p = monthlyTotal(costs[f.id])
+    if (q != null && p > 0) valueRaws.set(f.id, q / p)
+  }
+  const maxValueRaw = valueRaws.size ? Math.max(...valueRaws.values()) : 0
+
+  const out = new Map<string, GlobalScore>()
+  for (const f of flats) {
+    const q = quality.get(f.id)?.global ?? null
+    const p = monthlyTotal(costs[f.id])
+    const priceScore = p > 0 ? (maxP > minP ? (100 * (maxP - p)) / (maxP - minP) : 100) : null
+    const valueRaw = valueRaws.get(f.id)
+    const valueScore = valueRaw != null && maxValueRaw > 0 ? (100 * valueRaw) / maxValueRaw : null
+    let global: number | null
+    if (q == null) global = null
+    else if (priceScore != null && Wp > 0) global = (q * totalCritWeight + priceScore * Wp) / (totalCritWeight + Wp)
+    else global = q
+    out.set(f.id, { quality: q, priceScore, valueScore, global })
   }
   return out
 }
@@ -148,7 +207,7 @@ export interface Recommendation {
  */
 export function buildRecommendation(
   flats: Flat[],
-  scoreMap: Map<string, FlatScore>,
+  scoreMap: Map<string, { global: number | null }>,
   settings: AppSettings
 ): Recommendation {
   // The "seen" sequence: scored flats, in the order they were evaluated.

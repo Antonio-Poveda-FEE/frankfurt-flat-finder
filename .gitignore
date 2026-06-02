@@ -8,3 +8,4 @@ dist-ssr
 .vscode/*
 !.vscode/extensions.json
 .claude/settings.local.json
+.claude/scheduled_tasks.lock

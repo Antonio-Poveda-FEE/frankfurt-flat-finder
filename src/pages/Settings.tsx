@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react'
 import { useStore } from '../store/DataContext'
 import { useGeocode } from '../lib/useGeocode'
 import { useT } from '../lib/i18n'
+import type { Poi } from '../lib/types'
+
+const POI_EMOJIS = ['🏢','💼','🏋️','🏙️','🚉','🏥','🎓','🛒','👨‍👩‍👧','🌳']
 
 export default function Settings() {
   const {
     pois, criteria, settings, readOnly,
-    createPoi, deletePoi, createCriterion, updateCriterion, deleteCriterion, saveSettings,
+    createPoi, updatePoi, deletePoi, createCriterion, updateCriterion, deleteCriterion, saveSettings,
   } = useStore()
   const geocode = useGeocode()
   const { t } = useT()
@@ -15,6 +18,30 @@ export default function Settings() {
   const [poiLabel, setPoiLabel] = useState('')
   const [poiAddr, setPoiAddr] = useState('')
   const [poiEmoji, setPoiEmoji] = useState('📍')
+
+  // POI edit
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editLabel, setEditLabel] = useState('')
+  const [editAddr, setEditAddr] = useState('')
+  const [editEmoji, setEditEmoji] = useState('📍')
+  const [editBusy, setEditBusy] = useState(false)
+
+  function startEdit(p: Poi) {
+    setEditId(p.id); setEditLabel(p.label); setEditAddr(p.address ?? ''); setEditEmoji(p.emoji ?? '📍')
+  }
+  async function saveEdit(p: Poi) {
+    setEditBusy(true)
+    try {
+      const addr = editAddr.trim()
+      const patch: Partial<Poi> = { label: editLabel.trim(), address: addr || null, emoji: editEmoji.trim() || '📍' }
+      if (!addr) { patch.lat = null; patch.lng = null }
+      else if (geocode && addr !== (p.address ?? '')) { const c = await geocode(addr); patch.lat = c?.lat ?? null; patch.lng = c?.lng ?? null }
+      await updatePoi(p.id, patch)
+      setEditId(null)
+    } finally {
+      setEditBusy(false)
+    }
+  }
 
   // Criterion form
   const [critName, setCritName] = useState('')
@@ -85,16 +112,41 @@ export default function Settings() {
         <p className="text-[11px] text-slate-500">{t('Trabajo, gimnasio, centro… Se usan para calcular tiempos de ida desde cada piso.', 'Work, gym, centre… Used to compute travel times from each flat.')}</p>
         <ul className="space-y-2">
           {pois.map((p) => (
-            <li key={p.id} className="flex items-center justify-between rounded-lg bg-slate-800/60 px-3 py-2 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{p.emoji || '📍'}</span>
-                <div><span className="text-slate-100">{p.label}</span>{p.address && <span className="block text-xs text-slate-500">{p.address}</span>}</div>
-              </div>
-              {!readOnly && <button onClick={() => deletePoi(p.id)} className="text-xs text-red-400">{t('Eliminar', 'Delete')}</button>}
+            <li key={p.id} className="rounded-lg bg-slate-800/60 px-3 py-2 text-sm">
+              {editId === p.id ? (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input className={`w-16 text-center text-lg ${input}`} maxLength={4} aria-label="Emoji" value={editEmoji} onChange={(e) => setEditEmoji(e.target.value)} />
+                    <input className={`flex-1 ${input}`} placeholder={t('Nombre', 'Name')} value={editLabel} onChange={(e) => setEditLabel(e.target.value)} />
+                  </div>
+                  <input className={`w-full ${input}`} placeholder={t('Dirección', 'Address')} value={editAddr} onChange={(e) => setEditAddr(e.target.value)} />
+                  <div className="flex flex-wrap gap-1">
+                    {POI_EMOJIS.map((e) => (
+                      <button key={e} type="button" onClick={() => setEditEmoji(e)} className="rounded bg-slate-800 px-2 py-1 text-lg hover:bg-slate-700">{e}</button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <button disabled={!editLabel.trim() || editBusy} onClick={() => saveEdit(p)}
+                      className="rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{editBusy ? t('Guardando…', 'Saving…') : t('Guardar', 'Save')}</button>
+                    <button disabled={editBusy} onClick={() => setEditId(null)}
+                      className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 disabled:opacity-50">{t('Cancelar', 'Cancel')}</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <button type="button" disabled={readOnly} onClick={() => startEdit(p)}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default">
+                    <span className="text-lg">{p.emoji || '📍'}</span>
+                    <div className="min-w-0"><span className="text-slate-100">{p.label}</span>{p.address && <span className="block truncate text-xs text-slate-500">{p.address}</span>}</div>
+                  </button>
+                  {!readOnly && <button onClick={() => deletePoi(p.id)} className="shrink-0 text-xs text-red-400">{t('Eliminar', 'Delete')}</button>}
+                </div>
+              )}
             </li>
           ))}
           {pois.length === 0 && <li className="text-sm text-slate-500">{t('Aún no hay puntos de interés.', 'No points of interest yet.')}</li>}
         </ul>
+        {!readOnly && pois.length > 0 && <p className="text-[11px] text-slate-500">{t('Pulsa un punto de interés para editarlo.', 'Tap a point of interest to edit it.')}</p>}
         {!readOnly && (
           <>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -113,7 +165,7 @@ export default function Settings() {
                 className="rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{t('Añadir', 'Add')}</button>
             </div>
             <div className="flex flex-wrap gap-1">
-              {['🏢','💼','🏋️','🏙️','🚉','🏥','🎓','🛒','👨‍👩‍👧','🌳'].map((e) => (
+              {POI_EMOJIS.map((e) => (
                 <button key={e} type="button" onClick={() => setPoiEmoji(e)} className="rounded bg-slate-800 px-2 py-1 text-lg hover:bg-slate-700">{e}</button>
               ))}
             </div>

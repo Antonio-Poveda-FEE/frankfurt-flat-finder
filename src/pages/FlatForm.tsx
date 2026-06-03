@@ -136,6 +136,8 @@ export default function FlatForm() {
   }
 
   const input = 'block w-full min-w-0 rounded-lg bg-slate-800 px-3 py-2 text-white outline-none ring-1 ring-slate-700 focus:ring-sky-500'
+  // Native iOS date/time controls size themselves differently; appearance-none normalises them to match the other fields.
+  const dateInput = `${input} appearance-none [&::-webkit-date-and-time-value]:text-left [&::-webkit-calendar-picker-indicator]:opacity-60`
   const label = 'mb-1 block text-xs font-medium text-slate-400'
 
   if (readOnly) {
@@ -189,11 +191,11 @@ export default function FlatForm() {
               {Object.entries(STATUS_META).map(([k, v]) => <option key={k} value={k}>{t(v.label, v.labelEn)}</option>)}
             </select>
           </div>
-          <div className="min-w-0"><label className={label}>{t('Disponible desde', 'Available from')}</label><input type="date" value={form.available_from} onChange={set('available_from')} className={input} /></div>
+          <div className="min-w-0"><label className={label}>{t('Disponible desde', 'Available from')}</label><input type="date" value={form.available_from} onChange={set('available_from')} className={dateInput} /></div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <div className="min-w-0"><label className={label}>{t('Fecha de visita', 'Visit date')}</label><input type="date" value={form.visited_on} onChange={set('visited_on')} className={input} /></div>
-          <div className="min-w-0"><label className={label}>{t('Hora de visita', 'Visit time')}</label><input type="time" value={form.visit_time} onChange={set('visit_time')} className={input} /></div>
+          <div className="min-w-0"><label className={label}>{t('Fecha de visita', 'Visit date')}</label><input type="date" value={form.visited_on} onChange={set('visited_on')} className={dateInput} /></div>
+          <div className="min-w-0"><label className={label}>{t('Hora de visita', 'Visit time')}</label><input type="time" value={form.visit_time} onChange={set('visit_time')} className={dateInput} /></div>
         </div>
         <div>
           <label className={label}>{t('Enlace ImmoScout24', 'ImmoScout24 link')}</label>

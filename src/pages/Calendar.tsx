@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store/DataContext'
 import {
@@ -53,26 +53,16 @@ export default function Calendar() {
   const { t, lang } = useT()
   const locale = lang === 'en' ? 'en-GB' : 'es-ES'
   const formatDate = (key: string) => new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(parseDateKey(key))
+  const today = todayKey()
   const visits = useMemo(() => visitsFromFlats(flats), [flats])
   const byDate = useMemo(() => groupByDate(visits), [visits])
-  const firstVisit = visits[0]?.date
-  const [month, setMonth] = useState(monthKey(firstVisit ? parseDateKey(firstVisit) : new Date()))
-  const [selectedDate, setSelectedDate] = useState(firstVisit ?? todayKey())
-  const [initialized, setInitialized] = useState(false)
+  const [month, setMonth] = useState(monthKey(new Date()))
+  const [selectedDate, setSelectedDate] = useState(today)
   const [exporting, setExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const selectedDateVisits = byDate[selectedDate] ?? []
   const cells = useMemo(() => buildMonthCells(month), [month])
-
-  useEffect(() => {
-    if (loading || initialized) return
-    if (firstVisit) {
-      setMonth(monthKey(parseDateKey(firstVisit)))
-      setSelectedDate(firstVisit)
-    }
-    setInitialized(true)
-  }, [firstVisit, initialized, loading])
 
   async function exportEvents(events: VisitEvent[], filename: string) {
     if (events.length === 0) return
@@ -135,11 +125,14 @@ export default function Calendar() {
                 <span className={`text-xs ${isToday ? 'font-bold text-sky-300' : ''}`}>{Number(cell.key.slice(-2))}</span>
                 {dayVisits.length > 0 && (
                   <div className="mt-1 space-y-0.5">
-                    {dayVisits.slice(0, 2).map((visit) => (
-                      <span key={visit.id} className="block truncate rounded bg-amber-400/20 px-1 py-0.5 text-[10px] text-amber-200">
+                    {dayVisits.slice(0, 2).map((visit) => {
+                      const done = visit.date < today
+                      return (
+                      <span key={visit.id} className={`block truncate rounded px-1 py-0.5 text-[10px] ${done ? 'bg-emerald-500/20 text-emerald-200' : 'bg-amber-400/20 text-amber-200'}`}>
                         {visit.time ? `${formatVisitTime(visit.time)} · ${visit.flat.title}` : visit.flat.title}
                       </span>
-                    ))}
+                      )
+                    })}
                     {dayVisits.length > 2 && <span className="block text-[10px] text-slate-400">+{dayVisits.length - 2}</span>}
                   </div>
                 )}
@@ -171,17 +164,20 @@ export default function Calendar() {
           <p className="rounded-lg bg-slate-950 p-4 text-sm text-slate-400">{t('No hay visitas en esta fecha.', 'No visits on this date.')}</p>
         ) : (
           <ul className="space-y-2">
-            {selectedDateVisits.map((visit) => (
-              <li key={visit.id} className="flex items-center gap-2 rounded-lg bg-slate-950 p-3 ring-1 ring-slate-800 hover:ring-slate-600">
+            {selectedDateVisits.map((visit) => {
+              const done = visit.date < today
+              return (
+              <li key={visit.id} className={`flex items-center gap-2 rounded-lg bg-slate-950 p-3 ring-1 hover:ring-slate-600 ${done ? 'ring-emerald-600/50' : 'ring-slate-800'}`}>
                 <Link to={`/flat/${visit.flat.id}`} className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate font-semibold text-white">{visit.flat.title}</span>
+                    {done && <span className="shrink-0 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">{t('✓ Realizada', '✓ Done')}</span>}
                     <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
                       style={{ background: `${STATUS_META[visit.flat.status].color}22`, color: STATUS_META[visit.flat.status].color }}>
                       {t(STATUS_META[visit.flat.status].label, STATUS_META[visit.flat.status].labelEn)}
                     </span>
                   </div>
-                  <p className="text-xs text-sky-300">{visit.time ? formatVisitTime(visit.time) : t('Sin hora', 'No time')}</p>
+                  <p className={`text-xs ${done ? 'text-emerald-300' : 'text-sky-300'}`}>{visit.time ? formatVisitTime(visit.time) : t('Sin hora', 'No time')}</p>
                   <p className="truncate text-xs text-slate-400">{visit.flat.address || t('Sin dirección', 'No address')}</p>
                 </Link>
                 <span className="shrink-0 text-lg text-slate-500">›</span>
@@ -193,7 +189,8 @@ export default function Calendar() {
                   className="shrink-0 rounded-lg bg-slate-800 px-2 py-1.5 text-sm text-slate-200 disabled:opacity-50"
                 >📤</button>
               </li>
-            ))}
+              )
+            })}
           </ul>
         )}
         {error && <p className="mt-3 text-sm text-red-300">{error}</p>}

@@ -28,7 +28,7 @@ export default function PhotoManager({ flatId }: { flatId: string }) {
 
   return (
     <div className="space-y-3">
-      <input ref={inputRef} type="file" accept="image/*" multiple capture="environment" onChange={onPick} className="hidden" />
+      <input ref={inputRef} type="file" accept="image/*" multiple onChange={onPick} className="hidden" />
       <button type="button" onClick={() => inputRef.current?.click()} disabled={busy}
         className="w-full rounded-lg border border-dashed border-slate-600 py-3 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50">
         {busy ? t('Subiendo…', 'Uploading…') : t('📷 Añadir fotos (cámara o galería)', '📷 Add photos (camera or gallery)')}

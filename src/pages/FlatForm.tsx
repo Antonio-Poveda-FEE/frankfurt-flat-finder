@@ -135,7 +135,7 @@ export default function FlatForm() {
     }
   }
 
-  const input = 'w-full rounded-lg bg-slate-800 px-3 py-2 text-white outline-none ring-1 ring-slate-700 focus:ring-sky-500'
+  const input = 'block w-full min-w-0 rounded-lg bg-slate-800 px-3 py-2 text-white outline-none ring-1 ring-slate-700 focus:ring-sky-500'
   const label = 'mb-1 block text-xs font-medium text-slate-400'
 
   if (readOnly) {
@@ -189,11 +189,11 @@ export default function FlatForm() {
               {Object.entries(STATUS_META).map(([k, v]) => <option key={k} value={k}>{t(v.label, v.labelEn)}</option>)}
             </select>
           </div>
-          <div><label className={label}>{t('Disponible desde', 'Available from')}</label><input type="date" value={form.available_from} onChange={set('available_from')} className={input} /></div>
+          <div className="min-w-0"><label className={label}>{t('Disponible desde', 'Available from')}</label><input type="date" value={form.available_from} onChange={set('available_from')} className={input} /></div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <div><label className={label}>{t('Fecha de visita', 'Visit date')}</label><input type="date" value={form.visited_on} onChange={set('visited_on')} className={input} /></div>
-          <div><label className={label}>{t('Hora de visita', 'Visit time')}</label><input type="time" value={form.visit_time} onChange={set('visit_time')} className={input} /></div>
+          <div className="min-w-0"><label className={label}>{t('Fecha de visita', 'Visit date')}</label><input type="date" value={form.visited_on} onChange={set('visited_on')} className={input} /></div>
+          <div className="min-w-0"><label className={label}>{t('Hora de visita', 'Visit time')}</label><input type="time" value={form.visit_time} onChange={set('visit_time')} className={input} /></div>
         </div>
         <div>
           <label className={label}>{t('Enlace ImmoScout24', 'ImmoScout24 link')}</label>
@@ -227,7 +227,7 @@ export default function FlatForm() {
       {!editing && (
         <section className="space-y-3 rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
           <h2 className="font-semibold text-white">{t('Fotos', 'Photos')}</h2>
-          <input ref={photoInputRef} type="file" accept="image/*" multiple capture="environment" onChange={addPendingPhotos} className="hidden" />
+          <input ref={photoInputRef} type="file" accept="image/*" multiple onChange={addPendingPhotos} className="hidden" />
           <button type="button" onClick={() => photoInputRef.current?.click()} disabled={busy}
             className="w-full rounded-lg border border-dashed border-slate-600 py-3 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50">
             📷 {t('Añadir fotos (cámara o galería)', 'Add photos (camera or gallery)')}

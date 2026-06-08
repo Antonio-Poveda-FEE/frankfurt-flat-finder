@@ -89,6 +89,10 @@ export interface AppSettings {
   significance_k: number
   improvement_threshold: number
   price_weight: number
+  /** Reference monthly price (€) the value metric is anchored to. Null/0 ⇒ use the median price across flats. */
+  reference_price: number | null
+  /** Price sensitivity exponent for the value metric (0 = ignore price, 1 = quality per euro). */
+  price_beta: number
 }
 
 export const COST_FIELDS: { key: keyof Omit<FlatCosts, 'flat_id'>; label: string; labelEn: string; recurring: boolean }[] = [

@@ -67,19 +67,37 @@ export function computeFlatScores(criteria: Criterion[], scores: Score[]): Map<s
 export interface GlobalScore {
   /** Weighted criteria score, 0..100 (quality only, price excluded). */
   quality: number | null
-  /** Relative price score across flats, 0..100 (cheaper = higher). */
-  priceScore: number | null
-  /** Relative value-for-money (quality per euro), 0..100 (higher = better deal). */
-  valueScore: number | null
-  /** Final score combining quality with the price weight, 0..100. */
-  global: number | null
+  /**
+   * Absolute price-adjusted quality (the headline "value"). It's the quality
+   * you'd perceive if the flat cost the reference price, scaled by how its real
+   * price compares: quality × (referencePrice / price)^β. Stable across flats
+   * (no relative normalisation) and on the same 0..100-ish scale as quality;
+   * can exceed 100 for cheap, high-quality flats.
+   */
+  valueAdjusted: number | null
+}
+
+/** Median of a numeric list (0 if empty). */
+function median(xs: number[]): number {
+  if (xs.length === 0) return 0
+  const s = [...xs].sort((a, b) => a - b)
+  const mid = Math.floor(s.length / 2)
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2
 }
 
 /**
- * Combines the per-criterion quality with the flat price. Price is normalised
- * relative to the other flats (cheapest = 100) and folded into the global score
- * with `settings.price_weight` (on the same scale as criteria weights).
- * Value-for-money (quality per euro) is reported separately for the comparator.
+ * Price-adjusted quality (Option 1, "power" model). Anchors quality to a
+ * reference price with elasticity β: 0 ignores price, 1 = quality per euro.
+ */
+export function priceAdjustedQuality(quality: number, price: number, refPrice: number, beta: number): number {
+  if (price <= 0 || refPrice <= 0 || beta <= 0) return quality
+  return quality * Math.pow(refPrice / price, beta)
+}
+
+/**
+ * Computes each flat's quality and its absolute price-adjusted value. The
+ * reference price defaults to the median monthly price across flats when not
+ * set in settings.
  */
 export function computeGlobalScores(
   flats: Flat[],
@@ -89,33 +107,21 @@ export function computeGlobalScores(
   settings: AppSettings
 ): Map<string, GlobalScore> {
   const quality = computeFlatScores(criteria, scores)
-  const totalCritWeight = criteria.reduce((s, c) => s + c.weight, 0) || 1
-  const Wp = Math.max(0, settings.price_weight ?? 0)
+  const beta = Math.max(0, settings.price_beta ?? 0.3)
 
   const prices = flats.map((f) => monthlyTotal(costs[f.id])).filter((p) => p > 0)
-  const minP = prices.length ? Math.min(...prices) : 0
-  const maxP = prices.length ? Math.max(...prices) : 0
-
-  const valueRaws = new Map<string, number>()
-  for (const f of flats) {
-    const q = quality.get(f.id)?.global
-    const p = monthlyTotal(costs[f.id])
-    if (q != null && p > 0) valueRaws.set(f.id, q / p)
-  }
-  const maxValueRaw = valueRaws.size ? Math.max(...valueRaws.values()) : 0
+  const refPrice = settings.reference_price && settings.reference_price > 0
+    ? settings.reference_price
+    : median(prices)
 
   const out = new Map<string, GlobalScore>()
   for (const f of flats) {
     const q = quality.get(f.id)?.global ?? null
     const p = monthlyTotal(costs[f.id])
-    const priceScore = p > 0 ? (maxP > minP ? (100 * (maxP - p)) / (maxP - minP) : 100) : null
-    const valueRaw = valueRaws.get(f.id)
-    const valueScore = valueRaw != null && maxValueRaw > 0 ? (100 * valueRaw) / maxValueRaw : null
-    let global: number | null
-    if (q == null) global = null
-    else if (priceScore != null && Wp > 0) global = (q * totalCritWeight + priceScore * Wp) / (totalCritWeight + Wp)
-    else global = q
-    out.set(f.id, { quality: q, priceScore, valueScore, global })
+    const valueAdjusted = q == null ? null
+      : p > 0 && refPrice > 0 ? priceAdjustedQuality(q, p, refPrice, beta)
+      : q // no price data ⇒ fall back to raw quality
+    out.set(f.id, { quality: q, valueAdjusted })
   }
   return out
 }
@@ -155,13 +161,6 @@ export function expectedMaxStdNormal(m: number): number {
   return normInv((m - 0.375) / (m + 0.25))
 }
 
-/** Standard-normal CDF (Abramowitz & Stegun 7.1.26). */
-export function normCdf(z: number): number {
-  const t = 1 / (1 + 0.2316419 * Math.abs(z))
-  const d = 0.3989422804014327 * Math.exp((-z * z) / 2)
-  const p = d * t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))))
-  return z > 0 ? 1 - p : p
-}
 
 function mean(xs: number[]): number {
   return xs.reduce((a, b) => a + b, 0) / xs.length
@@ -373,41 +372,35 @@ export function buildRecommendation(
 // ───────────────────────────── Search-effort estimate ───────────────────────
 
 export interface SearchEffort {
-  /** Best score observed so far (across all flats, rejected included). */
-  best: number
-  mean: number
-  std: number
-  /** Probability a freshly visited flat scores ≥ the current best. */
-  p: number | null
-  /** Expected number of additional visits to find one ≥ the current best (1/p). */
-  expectedVisits: number | null
-  /** P(at least one flat ≥ best within k extra visits) for k = 1…kMax. */
+  /** Number of comparable (scored) flats already seen. */
+  n: number
+  /** P(beat the current best within k more visits) = k / (n + k), for k = 1…kMax. */
   curve: { k: number; prob: number }[]
+  /** Extra visits needed to reach a given chance of beating the current best. */
+  milestones: { target: number; k: number }[]
+  /** Median extra visits to beat the current best (= n). */
+  median: number
   feasible: boolean
 }
 
 /**
- * Models how many more flats you'd likely need to visit to beat (or match) the
- * best score you've already seen. Assumes scores are roughly normal with the
- * observed mean/std; the chance a new flat reaches the current best is
- * p = 1 − Φ((best − mean) / std), so the number of visits until success is
- * geometric with expectation 1/p, and the cumulative curve is 1 − (1 − p)^k.
+ * Estimates how many more flats you'd need to visit to beat your current best,
+ * using a distribution-free (exchangeability) model: among n + k comparable
+ * flats, the best is equally likely to be in any position, so the chance the
+ * top one is among the next k visits is exactly P(k) = k / (n + k). No normal
+ * tail to extrapolate — it depends only on how many flats you've already seen.
+ * The median wait is n (≈ "expect to roughly double your search for a coin
+ * flip"); we report milestones instead of a mean (which is ill-defined here).
  */
-export function estimateSearchEffort(values: number[]): SearchEffort {
-  const best = values.length ? Math.max(...values) : 0
-  const m = values.length ? mean(values) : 0
-  const sd = sampleStd(values)
-  const empty: SearchEffort = { best, mean: m, std: sd, p: null, expectedVisits: null, curve: [], feasible: false }
-  if (values.length < 2 || sd <= 0) return empty
+export function estimateSearchEffort(n: number): SearchEffort {
+  const empty: SearchEffort = { n, curve: [], milestones: [], median: 0, feasible: false }
+  if (n < 2) return empty
 
-  const z = (best - m) / sd
-  // Clamp to keep the estimate finite when the best is an extreme outlier.
-  const p = Math.min(0.5, Math.max(1e-4, 1 - normCdf(z)))
-  const expectedVisits = 1 / p
-  // Extend the curve a bit past the expected number of visits so the "avg"
-  // marker is always on-chart, capped so rare outliers don't stretch it forever.
-  const kMax = Math.min(120, Math.max(8, Math.ceil(expectedVisits * 1.4)))
+  // Visits to reach a target probability t: k = n·t / (1 − t).
+  const kFor = (t: number) => Math.ceil((n * t) / (1 - t))
+  const milestones = [0.5, 0.8, 0.9].map((target) => ({ target, k: kFor(target) }))
+  const kMax = Math.min(200, kFor(0.9)) // chart out to the 90% mark
   const curve: { k: number; prob: number }[] = []
-  for (let k = 1; k <= kMax; k++) curve.push({ k, prob: 1 - Math.pow(1 - p, k) })
-  return { best, mean: m, std: sd, p, expectedVisits, curve, feasible: true }
+  for (let k = 1; k <= kMax; k++) curve.push({ k, prob: k / (n + k) })
+  return { n, curve, milestones, median: n, feasible: true }
 }

@@ -52,23 +52,27 @@ export default function Settings() {
   const [n, setN] = useState(settings.planned_visits.toString())
   const [k, setK] = useState(settings.significance_k.toString())
   const [thr, setThr] = useState(settings.improvement_threshold.toString())
-  const [pw, setPw] = useState(settings.price_weight.toString())
+  const [refPrice, setRefPrice] = useState(settings.reference_price?.toString() ?? '')
+  const [beta, setBeta] = useState(settings.price_beta.toString())
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   useEffect(() => {
     setN(settings.planned_visits.toString())
     setK(settings.significance_k.toString())
     setThr(settings.improvement_threshold.toString())
-    setPw(settings.price_weight.toString())
+    setRefPrice(settings.reference_price?.toString() ?? '')
+    setBeta(settings.price_beta.toString())
   }, [settings])
 
   async function saveParams() {
     setSaveState('saving')
     try {
+      const refNum = parseFloat(refPrice)
       await saveSettings({
         planned_visits: Math.max(1, parseInt(n) || 1),
         significance_k: parseFloat(k) || 0,
         improvement_threshold: parseFloat(thr) || 0,
-        price_weight: Math.max(0, parseFloat(pw) || 0),
+        reference_price: Number.isFinite(refNum) && refNum > 0 ? refNum : null,
+        price_beta: Math.max(0, parseFloat(beta) || 0),
       })
       setSaveState('saved')
       setTimeout(() => setSaveState('idle'), 2500)
@@ -103,8 +107,12 @@ export default function Settings() {
             <input disabled={readOnly} className={`w-full ${input}`} inputMode="decimal" value={thr} onChange={(e) => setThr(e.target.value)} />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-slate-400">{t('Peso del precio', 'Price weight')}</span>
-            <input disabled={readOnly} className={`w-full ${input}`} inputMode="decimal" value={pw} onChange={(e) => setPw(e.target.value)} />
+            <span className="mb-1 block text-xs text-slate-400">{t('Precio de referencia (€/mes)', 'Reference price (€/mo)')}</span>
+            <input disabled={readOnly} className={`w-full ${input}`} inputMode="decimal" placeholder={t('mediana', 'median')} value={refPrice} onChange={(e) => setRefPrice(e.target.value)} />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-slate-400">{t('Sensibilidad al precio (β)', 'Price sensitivity (β)')}</span>
+            <input disabled={readOnly} className={`w-full ${input}`} inputMode="decimal" value={beta} onChange={(e) => setBeta(e.target.value)} />
           </label>
         </div>
         {!readOnly && (
@@ -121,8 +129,12 @@ export default function Settings() {
           </div>
         )}
         <p className="text-[11px] text-slate-500">
-          {t('N alimenta la regla del 37%. k define cuánto debe destacar un piso (z-score) para considerarse claramente mejor. La mejora mínima decide cuándo dejar de buscar. El peso del precio es cuánto pesa el coste mensual en la nota global (misma escala que los pesos de criterios; 0 = ignorar el precio).',
-             'N feeds the 37% rule. k defines how much a flat must stand out (z-score) to count as clearly better. The minimum improvement decides when to stop looking. The price weight is how much the monthly cost counts in the global score (same scale as criteria weights; 0 = ignore price).')}
+          {t('N alimenta la regla del 37%. k define cuánto debe destacar un piso (z-score) para considerarse claramente mejor. La mejora mínima decide cuándo dejar de buscar.',
+             'N feeds the 37% rule. k defines how much a flat must stand out (z-score) to count as clearly better. The minimum improvement decides when to stop looking.')}
+        </p>
+        <p className="text-[11px] text-slate-500">
+          {t('Puntuación «Valor» = calidad × (precio de referencia ÷ precio)^β. El precio de referencia es tu presupuesto objetivo (si lo dejas vacío se usa la mediana de los pisos). β controla cuánto pesa el precio: 0 = ignorarlo (solo calidad), 0,3–0,5 = equilibrio, 1 = calidad por euro pura.',
+             'The “Value” score = quality × (reference price ÷ price)^β. The reference price is your target budget (left empty, the median across flats is used). β controls how much price matters: 0 = ignore it (quality only), 0.3–0.5 = balanced, 1 = pure quality per euro.')}
         </p>
       </section>
 

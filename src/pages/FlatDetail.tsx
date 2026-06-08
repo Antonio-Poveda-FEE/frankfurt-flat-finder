@@ -62,7 +62,7 @@ export default function FlatDetail() {
   if (!flat) return <p className="text-slate-400">Piso no encontrado. <Link className="text-sky-400" to="/">Volver</Link></p>
 
   const gs = scoreMap.get(flat.id)
-  const score = gs?.valueScore ?? null
+  const score = gs?.valueAdjusted ?? null
   const c = costs[flat.id]
   const total = monthlyTotal(c)
   const ppm2 = pricePerM2(c, flat.size_m2)
@@ -83,7 +83,7 @@ export default function FlatDetail() {
             <span className="text-lg font-bold" style={{ color: scoreColor(gs?.quality ?? null) }}>{gs?.quality != null ? gs.quality.toFixed(0) : '—'}</span>
             <span className="text-[10px] text-slate-500">{t('global', 'global')}</span>
           </div>
-          <div className="flex flex-col items-center rounded-xl bg-slate-900 px-3 py-1 ring-1 ring-slate-800" title={t('Puntuación normalizada por precio (calidad por euro)', 'Price-normalised score (quality per euro)')}>
+          <div className="flex flex-col items-center rounded-xl bg-slate-900 px-3 py-1 ring-1 ring-slate-800" title={t('Calidad ajustada por precio (respecto al precio de referencia en Ajustes)', 'Quality adjusted for price (relative to the reference price in Settings)')}>
             <span className="text-2xl font-bold" style={{ color: scoreColor(score) }}>{score == null ? '—' : score.toFixed(0)}</span>
             <span className="text-[10px] text-slate-500">{t('valor ★', 'value ★')}</span>
           </div>

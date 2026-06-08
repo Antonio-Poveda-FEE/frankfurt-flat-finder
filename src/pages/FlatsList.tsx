@@ -23,7 +23,7 @@ export default function FlatsList() {
   const bestId = useMemo(() => {
     let best: { id: string; g: number } | null = null
     for (const f of flats) {
-      const g = scoreMap.get(f.id)?.valueScore
+      const g = scoreMap.get(f.id)?.valueAdjusted
       if (g != null && (!best || g > best.g)) best = { id: f.id, g }
     }
     return best?.id ?? null
@@ -34,7 +34,7 @@ export default function FlatsList() {
       .filter((f) => filter === 'all' || f.status === filter)
       .map((f) => ({
         flat: f,
-        score: scoreMap.get(f.id)?.valueScore ?? null,
+        score: scoreMap.get(f.id)?.valueAdjusted ?? null,
         rated: qualityMap.get(f.id)?.ratedCriteria ?? 0,
         total: monthlyTotal(costs[f.id]),
         ppm2: pricePerM2(costs[f.id], f.size_m2),

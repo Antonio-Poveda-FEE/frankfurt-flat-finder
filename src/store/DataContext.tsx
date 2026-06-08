@@ -51,7 +51,7 @@ interface StoreContextValue extends StoreData {
   saveSettings: (patch: Partial<AppSettings>) => Promise<void>
 }
 
-const emptySettings: AppSettings = { id: 1, planned_visits: 12, significance_k: 1, improvement_threshold: 3, price_weight: 1.5 }
+const emptySettings: AppSettings = { id: 1, planned_visits: 12, significance_k: 1, improvement_threshold: 3, price_weight: 1.5, reference_price: null, price_beta: 0.3 }
 
 const StoreContext = createContext<StoreContextValue | null>(null)
 

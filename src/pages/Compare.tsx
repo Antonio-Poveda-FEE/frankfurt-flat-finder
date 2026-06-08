@@ -20,35 +20,29 @@ export default function Compare() {
   const { t, lang } = useT()
   const qualityMap = useMemo(() => computeFlatScores(criteria, scores), [criteria, scores])
   const scoreMap = useMemo(() => computeGlobalScores(flats, costs, criteria, scores, settings), [flats, costs, criteria, scores, settings])
-  // Headline metric = value (price-normalised, quality ÷ price). Markers + the
+  // Headline metric = price-adjusted value (absolute). Markers + the
   // recommendation engine rank by this. Raw quality is shown alongside.
   const valueMap = useMemo(
-    () => new Map(flats.map((f) => [f.id, { global: scoreMap.get(f.id)?.valueScore ?? null }])),
+    () => new Map(flats.map((f) => [f.id, { global: scoreMap.get(f.id)?.valueAdjusted ?? null }])),
     [flats, scoreMap]
   )
-  const mapFlats = useMemo(() => flats.map((f) => ({ flat: f, score: scoreMap.get(f.id)?.valueScore ?? null })), [flats, scoreMap])
+  const mapFlats = useMemo(() => flats.map((f) => ({ flat: f, score: scoreMap.get(f.id)?.valueAdjusted ?? null })), [flats, scoreMap])
   const rec = useMemo(() => buildRecommendation(flats, valueMap, settings, lang), [flats, valueMap, settings, lang])
 
-  // Search-effort estimate: all flats (rejected included). Uses the *raw*
-  // value-for-money ratio (quality ÷ monthly price) — not the relative value
-  // score, which always pins the best flat at 100 and would make the estimate
-  // circular. Only z-scores matter, so the ratio's absolute scale is irrelevant.
-  const effort = useMemo(() => {
-    const vals = flats
-      .map((f) => {
-        const q = qualityMap.get(f.id)?.global
-        const p = monthlyTotal(costs[f.id])
-        return q != null && p > 0 ? q / p : null
-      })
-      .filter((v): v is number => v != null)
-    return estimateSearchEffort(vals)
-  }, [flats, qualityMap, costs])
+  // Search-effort estimate (rank/exchangeability model): only the count of
+  // comparable (scored) flats matters — rejected ones included. Distribution-
+  // free, so it's independent of the value metric or its normalisation.
+  const scoredCount = useMemo(
+    () => flats.filter((f) => qualityMap.get(f.id)?.global != null).length,
+    [flats, qualityMap]
+  )
+  const effort = useMemo(() => estimateSearchEffort(scoredCount), [scoredCount])
 
   const ranked = useMemo(() =>
     flats
       .map((f) => ({ flat: f, gs: scoreMap.get(f.id) }))
-      .filter((r) => r.gs?.valueScore != null)
-      .sort((a, b) => (b.gs!.valueScore! - a.gs!.valueScore!)),
+      .filter((r) => r.gs?.valueAdjusted != null)
+      .sort((a, b) => (b.gs!.valueAdjusted! - a.gs!.valueAdjusted!)),
   [flats, scoreMap])
 
   const [selected, setSelected] = useState<string[]>([])
@@ -94,7 +88,7 @@ export default function Compare() {
                     <th className="px-1 py-2 text-left">Piso</th>
                     <th className="px-2 py-2 text-right">€/mes</th>
                     <th className="px-2 py-2 text-right" title={t('Global (raw): calidad por criterios, sin tener en cuenta el precio', 'Global (raw): criteria quality, ignoring price')}>{t('Global', 'Global')}</th>
-                    <th className="px-3 py-2 text-right" title={t('Puntuación normalizada por precio (calidad por euro)', 'Price-normalised score (quality per euro)')}>{t('Valor ★', 'Value ★')}</th>
+                    <th className="px-3 py-2 text-right" title={t('Calidad ajustada por precio respecto al precio de referencia (Ajustes)', 'Quality adjusted for price relative to the reference price (Settings)')}>{t('Valor ★', 'Value ★')}</th>
                     <th className="px-2 py-2 text-center">{t('Radar', 'Radar')}</th>
                   </tr>
                 </thead>
@@ -111,7 +105,7 @@ export default function Compare() {
                         </td>
                         <td className="px-2 py-2 text-right text-slate-300">{eur(total)}</td>
                         <td className="px-2 py-2 text-right font-medium" style={{ color: scoreColor(gs.quality) }}>{gs.quality != null ? gs.quality.toFixed(0) : '—'}</td>
-                        <td className="px-3 py-2 text-right font-bold" style={{ color: scoreColor(gs.valueScore) }}>{gs.valueScore != null ? gs.valueScore.toFixed(0) : '—'}</td>
+                        <td className="px-3 py-2 text-right font-bold" style={{ color: scoreColor(gs.valueAdjusted) }}>{gs.valueAdjusted != null ? gs.valueAdjusted.toFixed(0) : '—'}</td>
                         <td className="px-2 py-2 text-center">
                           <input type="checkbox" checked={sel} onChange={() => toggle(r.flat.id)} className="h-4 w-4 accent-sky-500" />
                         </td>
@@ -122,21 +116,29 @@ export default function Compare() {
               </table>
             </div>
             <p className="px-4 py-2 text-[11px] text-slate-500">
-              {t('Global = calidad por criterios (sin precio) · Valor ★ = puntuación normalizada por precio (calidad por euro), la que manda en el ranking y la recomendación. Marca hasta 5 pisos para el radar.',
-                 'Global = criteria quality (no price) · Value ★ = price-normalised score (quality per euro), which drives the ranking and recommendation. Tick up to 5 flats for the radar.')}
+              {t('Global = calidad por criterios (sin precio) · Valor ★ = calidad ajustada por precio (respecto al precio de referencia, configurable en Ajustes), la que manda en el ranking y la recomendación. Marca hasta 5 pisos para el radar.',
+                 'Global = criteria quality (no price) · Value ★ = quality adjusted for price (relative to the reference price, set in Settings), which drives the ranking and recommendation. Tick up to 5 flats for the radar.')}
             </p>
           </section>
 
-          {/* Search-effort estimate */}
+          {/* Search-effort estimate (rank model) */}
           {effort.feasible && (
             <section className="rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
               <h2 className="mb-1 font-semibold text-white">{t('¿Cuántos pisos más hasta encontrar uno mejor?', 'How many more flats until a better one?')}</h2>
               <p className="mb-3 text-sm text-slate-300">
-                {t('De media harían falta ', 'On average it would take ')}
-                <b className="text-sky-300">≈ {Math.round(effort.expectedVisits!)} {t('visitas', 'visits')}</b>
-                {t(' para encontrar un piso con mejor relación calidad-precio que tu mejor actual.',
-                   ' to find a flat with a better value-for-money than your current best.')}
+                {t('Has comparado ', 'You\'ve compared ')}<b className="text-slate-100">{effort.n}</b>
+                {t(' pisos. Para tener un 50 % de probabilidad de superar tu mejor piso necesitarías visitar ', ' flats. For a 50% chance of beating your best flat you\'d need to visit ')}
+                <b className="text-sky-300">≈ {effort.median} {t('más', 'more')}</b>
+                {t(' (≈ duplicar tu búsqueda).', ' (≈ doubling your search).')}
               </p>
+              <div className="mb-3 grid grid-cols-3 gap-2 text-center">
+                {effort.milestones.map((ms) => (
+                  <div key={ms.target} className="rounded-lg bg-slate-800/60 py-2">
+                    <div className="text-lg font-bold text-white">+{ms.k}</div>
+                    <div className="text-[10px] text-slate-500">{t('para', 'for')} {Math.round(ms.target * 100)}%</div>
+                  </div>
+                ))}
+              </div>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={effort.curve} margin={{ top: 8, right: 12, bottom: 4, left: -8 }}>
@@ -148,23 +150,25 @@ export default function Compare() {
                     </defs>
                     <CartesianGrid stroke="#1e293b" />
                     <XAxis dataKey="k" tick={{ fill: '#94a3b8', fontSize: 11 }}
-                      label={{ value: t('pisos visitados', 'flats visited'), position: 'insideBottom', offset: -2, fill: '#64748b', fontSize: 11 }} />
+                      label={{ value: t('pisos visitados de más', 'extra flats visited'), position: 'insideBottom', offset: -2, fill: '#64748b', fontSize: 11 }} />
                     <YAxis domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} tick={{ fill: '#94a3b8', fontSize: 11 }} width={44} />
                     <Tooltip
                       contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
                       labelStyle={{ color: '#e2e8f0' }}
-                      formatter={(v: number) => [`${(v * 100).toFixed(0)}%`, t('prob. de hallar uno mejor', 'chance of a better one')]}
-                      labelFormatter={(k) => t(`Tras ${k} pisos`, `After ${k} flats`)}
+                      formatter={(v: number) => [`${(v * 100).toFixed(0)}%`, t('prob. de superar tu mejor', 'chance of beating your best')]}
+                      labelFormatter={(k) => t(`Tras ${k} pisos más`, `After ${k} more flats`)}
                     />
-                    <ReferenceLine x={Math.round(effort.expectedVisits!)} stroke="#f59e0b" strokeDasharray="4 3"
-                      label={{ value: t('media', 'avg'), fill: '#f59e0b', fontSize: 11, position: 'top' }} />
+                    {effort.milestones.map((ms) => (
+                      <ReferenceLine key={ms.target} x={ms.k} stroke="#f59e0b" strokeDasharray="4 3"
+                        label={{ value: `${Math.round(ms.target * 100)}%`, fill: '#f59e0b', fontSize: 10, position: 'top' }} />
+                    ))}
                     <Area type="monotone" dataKey="prob" stroke="#38bdf8" strokeWidth={2} fill="url(#effortFill)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
               <p className="mt-2 text-[11px] text-slate-500">
-                {t('Probabilidad de que, visitando X pisos más, al menos uno iguale o supere tu mejor puntuación actual (modelo normal sobre todos los pisos puntuados, incluidos los descartados).',
-                   'Probability that, visiting X more flats, at least one matches or beats your current best score (normal model over all scored flats, rejected included).')}
+                {t('Probabilidad de que, visitando X pisos más, al menos uno supere tu mejor piso actual. Modelo por rango P = k/(n+k): no supone ninguna distribución, solo cuenta cuántos pisos llevas (n), incluidos los descartados. Refleja los rendimientos decrecientes de seguir buscando.',
+                   'Probability that, visiting X more flats, at least one beats your current best. Rank model P = k/(n+k): assumes no distribution, just counts how many flats you\'ve seen (n), rejected included. It reflects the diminishing returns of searching further.')}
               </p>
             </section>
           )}

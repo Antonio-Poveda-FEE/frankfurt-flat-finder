@@ -61,7 +61,8 @@ export default function FlatDetail() {
 
   if (!flat) return <p className="text-slate-400">Piso no encontrado. <Link className="text-sky-400" to="/">Volver</Link></p>
 
-  const score = scoreMap.get(flat.id)?.global ?? null
+  const gs = scoreMap.get(flat.id)
+  const score = gs?.valueScore ?? null
   const c = costs[flat.id]
   const total = monthlyTotal(c)
   const ppm2 = pricePerM2(c, flat.size_m2)
@@ -77,9 +78,15 @@ export default function FlatDetail() {
             <a href={placeUrl(flat)} target="_blank" rel="noreferrer" className="text-sm text-sky-400 hover:underline">📍 {flat.address}</a>
           )}
         </div>
-        <div className="flex shrink-0 flex-col items-center rounded-xl bg-slate-900 px-3 py-1 ring-1 ring-slate-800">
-          <span className="text-2xl font-bold" style={{ color: scoreColor(score) }}>{score == null ? '—' : score.toFixed(0)}</span>
-          <span className="text-[10px] text-slate-500">/100</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="flex flex-col items-center rounded-xl bg-slate-900 px-3 py-1 ring-1 ring-slate-800" title={t('Calidad por criterios (sin precio)', 'Criteria quality (no price)')}>
+            <span className="text-lg font-bold" style={{ color: scoreColor(gs?.quality ?? null) }}>{gs?.quality != null ? gs.quality.toFixed(0) : '—'}</span>
+            <span className="text-[10px] text-slate-500">{t('global', 'global')}</span>
+          </div>
+          <div className="flex flex-col items-center rounded-xl bg-slate-900 px-3 py-1 ring-1 ring-slate-800" title={t('Puntuación normalizada por precio (calidad por euro)', 'Price-normalised score (quality per euro)')}>
+            <span className="text-2xl font-bold" style={{ color: scoreColor(score) }}>{score == null ? '—' : score.toFixed(0)}</span>
+            <span className="text-[10px] text-slate-500">{t('valor ★', 'value ★')}</span>
+          </div>
         </div>
       </div>
 
@@ -207,12 +214,14 @@ export default function FlatDetail() {
               <button onClick={() => setNearbyCat('food')} className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🍻 {t('Bares/restaurantes cerca', 'Bars/restaurants nearby')}</button>
               <button onClick={() => setNearbyCat('park')} className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🌳 {t('Parques cerca', 'Parks nearby')}</button>
               <button onClick={() => setNearbyCat('supermarket')} className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🛒 {t('Supermercados cerca', 'Supermarkets nearby')}</button>
+              <button onClick={() => setNearbyCat('gym')} className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🏋️ {t('Gimnasios cerca', 'Gyms nearby')}</button>
             </>
           ) : (
             <>
               <a href={nearbyUrl(flat, 'bares restaurantes')} target="_blank" rel="noreferrer" className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🍻 {t('Bares/restaurantes cerca', 'Bars/restaurants nearby')}</a>
               <a href={nearbyUrl(flat, 'parques')} target="_blank" rel="noreferrer" className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🌳 {t('Parques cerca', 'Parks nearby')}</a>
               <a href={nearbyUrl(flat, 'supermercado')} target="_blank" rel="noreferrer" className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🛒 {t('Supermercados cerca', 'Supermarkets nearby')}</a>
+              <a href={nearbyUrl(flat, 'gimnasio')} target="_blank" rel="noreferrer" className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">🏋️ {t('Gimnasios cerca', 'Gyms nearby')}</a>
             </>
           )}
         </div>

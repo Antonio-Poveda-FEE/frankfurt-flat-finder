@@ -155,6 +155,14 @@ export function expectedMaxStdNormal(m: number): number {
   return normInv((m - 0.375) / (m + 0.25))
 }
 
+/** Standard-normal CDF (Abramowitz & Stegun 7.1.26). */
+export function normCdf(z: number): number {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z))
+  const d = 0.3989422804014327 * Math.exp((-z * z) / 2)
+  const p = d * t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))))
+  return z > 0 ? 1 - p : p
+}
+
 function mean(xs: number[]): number {
   return xs.reduce((a, b) => a + b, 0) / xs.length
 }
@@ -213,6 +221,8 @@ export function buildRecommendation(
   lang: Lang = 'es'
 ): Recommendation {
   // The "seen" sequence: scored flats, in the order they were evaluated.
+  // Rejected flats stay in the sequence for statistics (mean/std/benchmark) but
+  // are never recommended as a choice.
   const seen: SeenFlat[] = flats
     .map((f) => ({ flat: f, fs: scoreMap.get(f.id) }))
     .filter((x) => x.fs && x.fs.global != null)
@@ -222,6 +232,7 @@ export function buildRecommendation(
       const db = `${a2.flat.visited_on || a2.flat.created_at} ${a2.flat.visit_time ?? ''}`
       return da < db ? -1 : da > db ? 1 : 0
     })
+  const isRecommendable = (s: SeenFlat) => s.flat.status !== 'rejected'
 
   const N = Math.max(seen.length, settings.planned_visits)
   const explorationCount = Math.max(1, Math.round(N / Math.E))
@@ -248,19 +259,25 @@ export function buildRecommendation(
 
   if (seenCount === 0) return base
 
+  // Statistics use every scored flat (rejected included).
   const globals = seen.map((s) => s.global)
   const m = mean(globals)
   const sd = sampleStd(globals)
-  const bestFlat = seen.reduce((a, b) => (b.global > a.global ? b : a))
+  // The recommended "best" only considers flats you haven't discarded.
+  const recommendable = seen.filter(isRecommendable)
+  const bestFlat = recommendable.length
+    ? recommendable.reduce((a, b) => (b.global > a.global ? b : a))
+    : seen.reduce((a, b) => (b.global > a.global ? b : a))
   const phase: Recommendation['phase'] = seenCount <= explorationCount ? 'exploration' : 'decision'
 
-  // Secretary rule: benchmark is the best score seen during exploration.
+  // Secretary rule: benchmark is the best score seen during exploration (stats).
   const explorationWindow = seen.slice(0, Math.min(explorationCount, seenCount))
   const benchmark = explorationWindow.length ? Math.max(...explorationWindow.map((s) => s.global)) : null
   let acceptCandidate: SeenFlat | null = null
   if (phase === 'decision' && benchmark != null) {
+    // Only ever suggest accepting a non-discarded flat.
     for (const s of seen.slice(explorationCount)) {
-      if (s.global > benchmark) { acceptCandidate = s; break }
+      if (isRecommendable(s) && s.global > benchmark) { acceptCandidate = s; break }
     }
   }
 
@@ -351,4 +368,46 @@ export function buildRecommendation(
     headline,
     bullets,
   }
+}
+
+// ───────────────────────────── Search-effort estimate ───────────────────────
+
+export interface SearchEffort {
+  /** Best score observed so far (across all flats, rejected included). */
+  best: number
+  mean: number
+  std: number
+  /** Probability a freshly visited flat scores ≥ the current best. */
+  p: number | null
+  /** Expected number of additional visits to find one ≥ the current best (1/p). */
+  expectedVisits: number | null
+  /** P(at least one flat ≥ best within k extra visits) for k = 1…kMax. */
+  curve: { k: number; prob: number }[]
+  feasible: boolean
+}
+
+/**
+ * Models how many more flats you'd likely need to visit to beat (or match) the
+ * best score you've already seen. Assumes scores are roughly normal with the
+ * observed mean/std; the chance a new flat reaches the current best is
+ * p = 1 − Φ((best − mean) / std), so the number of visits until success is
+ * geometric with expectation 1/p, and the cumulative curve is 1 − (1 − p)^k.
+ */
+export function estimateSearchEffort(values: number[]): SearchEffort {
+  const best = values.length ? Math.max(...values) : 0
+  const m = values.length ? mean(values) : 0
+  const sd = sampleStd(values)
+  const empty: SearchEffort = { best, mean: m, std: sd, p: null, expectedVisits: null, curve: [], feasible: false }
+  if (values.length < 2 || sd <= 0) return empty
+
+  const z = (best - m) / sd
+  // Clamp to keep the estimate finite when the best is an extreme outlier.
+  const p = Math.min(0.5, Math.max(1e-4, 1 - normCdf(z)))
+  const expectedVisits = 1 / p
+  // Extend the curve a bit past the expected number of visits so the "avg"
+  // marker is always on-chart, capped so rare outliers don't stretch it forever.
+  const kMax = Math.min(120, Math.max(8, Math.ceil(expectedVisits * 1.4)))
+  const curve: { k: number; prob: number }[] = []
+  for (let k = 1; k <= kMax; k++) curve.push({ k, prob: 1 - Math.pow(1 - p, k) })
+  return { best, mean: m, std: sd, p, expectedVisits, curve, feasible: true }
 }

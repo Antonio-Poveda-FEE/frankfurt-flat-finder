@@ -53,12 +53,29 @@ export default function Settings() {
   const [k, setK] = useState(settings.significance_k.toString())
   const [thr, setThr] = useState(settings.improvement_threshold.toString())
   const [pw, setPw] = useState(settings.price_weight.toString())
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   useEffect(() => {
     setN(settings.planned_visits.toString())
     setK(settings.significance_k.toString())
     setThr(settings.improvement_threshold.toString())
     setPw(settings.price_weight.toString())
   }, [settings])
+
+  async function saveParams() {
+    setSaveState('saving')
+    try {
+      await saveSettings({
+        planned_visits: Math.max(1, parseInt(n) || 1),
+        significance_k: parseFloat(k) || 0,
+        improvement_threshold: parseFloat(thr) || 0,
+        price_weight: Math.max(0, parseFloat(pw) || 0),
+      })
+      setSaveState('saved')
+      setTimeout(() => setSaveState('idle'), 2500)
+    } catch {
+      setSaveState('idle')
+    }
+  }
 
   const input = 'rounded-lg bg-slate-800 px-3 py-2 text-white text-sm outline-none ring-1 ring-slate-700 focus:ring-sky-500 disabled:opacity-60'
 
@@ -91,14 +108,17 @@ export default function Settings() {
           </label>
         </div>
         {!readOnly && (
-          <button
-            onClick={() => saveSettings({
-              planned_visits: Math.max(1, parseInt(n) || 1),
-              significance_k: parseFloat(k) || 0,
-              improvement_threshold: parseFloat(thr) || 0,
-              price_weight: Math.max(0, parseFloat(pw) || 0),
-            })}
-            className="rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-white">{t('Guardar parámetros', 'Save parameters')}</button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={saveParams}
+              disabled={saveState === 'saving'}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold text-white transition disabled:opacity-60 ${saveState === 'saved' ? 'bg-emerald-500' : 'bg-sky-500 hover:bg-sky-400'}`}>
+              {saveState === 'saving' ? t('Guardando…', 'Saving…')
+                : saveState === 'saved' ? t('✓ Guardado', '✓ Saved')
+                : t('Guardar parámetros', 'Save parameters')}
+            </button>
+            {saveState === 'saved' && <span className="text-xs text-emerald-400">{t('Parámetros actualizados', 'Parameters updated')}</span>}
+          </div>
         )}
         <p className="text-[11px] text-slate-500">
           {t('N alimenta la regla del 37%. k define cuánto debe destacar un piso (z-score) para considerarse claramente mejor. La mejora mínima decide cuándo dejar de buscar. El peso del precio es cuánto pesa el coste mensual en la nota global (misma escala que los pesos de criterios; 0 = ignorar el precio).',

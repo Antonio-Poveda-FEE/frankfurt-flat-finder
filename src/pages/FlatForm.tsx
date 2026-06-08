@@ -24,6 +24,7 @@ export default function FlatForm() {
   const [form, setForm] = useState(emptyForm)
   const [cost, setCost] = useState<Record<string, string>>({})
   const [pendingPhotos, setPendingPhotos] = useState<File[]>([])
+  const [primaryIndex, setPrimaryIndex] = useState(0)
   const [busy, setBusy] = useState(false)
   const [geo, setGeo] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -76,12 +77,18 @@ export default function FlatForm() {
 
   function addPendingPhotos(e: React.ChangeEvent<HTMLInputElement>) {
     if (!e.target.files?.length) return
-    setPendingPhotos((current) => [...current, ...Array.from(e.target.files!)])
+    // Capture the files synchronously: clearing the input below empties
+    // e.target.files, and React may run the state updater afterwards (so reading
+    // e.target.files inside it would lose the selection — the iOS "can't add
+    // photos" bug, worse after other fields re-rendered the form).
+    const added = Array.from(e.target.files)
+    setPendingPhotos((current) => [...current, ...added])
     e.target.value = ''
   }
 
   function removePendingPhoto(index: number) {
     setPendingPhotos((current) => current.filter((_, i) => i !== index))
+    setPrimaryIndex((p) => (index === p ? 0 : index < p ? p - 1 : p))
   }
 
   async function submit(e: React.FormEvent) {
@@ -124,7 +131,7 @@ export default function FlatForm() {
         flatId = created?.id
         if (flatId) {
           await saveCosts(flatId, costPayload)
-          if (pendingPhotos.length > 0) await uploadPhotos(flatId, pendingPhotos)
+          if (pendingPhotos.length > 0) await uploadPhotos(flatId, pendingPhotos, { primaryIndex })
         }
       }
       if (flatId) navigate(`/flat/${flatId}`)
@@ -237,16 +244,24 @@ export default function FlatForm() {
           {pendingPhotoPreviews.length > 0 && (
             <>
               <div className="grid grid-cols-3 gap-2">
-                {pendingPhotoPreviews.map(({ file, url }, index) => (
-                  <div key={`${file.name}-${file.lastModified}-${index}`} className="relative aspect-square overflow-hidden rounded-lg bg-slate-800 ring-1 ring-slate-700">
-                    <img src={url} alt="" className="h-full w-full object-cover" />
-                    <button type="button" onClick={() => removePendingPhoto(index)}
-                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white">×</button>
-                  </div>
-                ))}
+                {pendingPhotoPreviews.map(({ file, url }, index) => {
+                  const primary = index === primaryIndex
+                  return (
+                    <div key={`${file.name}-${file.lastModified}-${index}`} className={`relative aspect-square overflow-hidden rounded-lg bg-slate-800 ring-2 ${primary ? 'ring-amber-400' : 'ring-slate-700'}`}>
+                      <img src={url} alt="" className="h-full w-full object-cover" />
+                      <button type="button" title={primary ? t('Foto principal', 'Cover photo') : t('Hacer principal', 'Make cover')} onClick={() => setPrimaryIndex(index)}
+                        className="absolute left-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs">
+                        <span className={primary ? 'text-amber-400' : 'text-slate-300'}>{primary ? '★' : '☆'}</span>
+                      </button>
+                      {primary && <span className="absolute bottom-1 left-1 rounded bg-amber-500/80 px-1 text-[9px] font-bold text-black">{t('PORTADA', 'COVER')}</span>}
+                      <button type="button" onClick={() => removePendingPhoto(index)}
+                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white">×</button>
+                    </div>
+                  )
+                })}
               </div>
               <p className="text-[11px] text-slate-500">
-                {t('Se subirán al guardar el piso. La primera foto será la portada si no eliges otra después.', 'They upload when you save the flat. The first photo is the cover unless you pick another later.')}
+                {t('Se subirán al guardar el piso. Pulsa la ★ para elegir la portada (por defecto la primera).', 'They upload when you save the flat. Tap the ★ to choose the cover (the first one by default).')}
               </p>
             </>
           )}

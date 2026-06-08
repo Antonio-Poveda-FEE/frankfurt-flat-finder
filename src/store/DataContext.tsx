@@ -31,7 +31,7 @@ interface StoreContextValue extends StoreData {
   // costs
   saveCosts: (flatId: string, costs: Partial<FlatCosts>) => Promise<void>
   // photos
-  uploadPhotos: (flatId: string, files: FileList | File[]) => Promise<void>
+  uploadPhotos: (flatId: string, files: FileList | File[], opts?: { primaryIndex?: number }) => Promise<void>
   deletePhoto: (photo: FlatPhoto) => Promise<void>
   setPrimaryPhoto: (flatId: string, photoId: string) => Promise<void>
   // poi times
@@ -75,8 +75,10 @@ export function StoreProvider({ session, children }: { session: Session; childre
   })
   const [loading, setLoading] = useState(true)
 
-  const reloadAll = useCallback(async () => {
-    setLoading(true)
+  // Silent refetch: refreshes all data without flipping the global `loading`
+  // flag, so writes (create/score/cost/photo…) don't blank the whole screen
+  // with a "Loading…" state. Only the very first load shows the spinner.
+  const refetch = useCallback(async () => {
     const [criteria, pois, flats, costs, photos, poiTimes, scores, settings] = await Promise.all([
       supabase.from('criteria').select('*').order('sort_order'),
       supabase.from('pois').select('*').order('label'),
@@ -97,22 +99,26 @@ export function StoreProvider({ session, children }: { session: Session; childre
       scores: (scores.data as Score[]) ?? [],
       settings: (settings.data as AppSettings) ?? emptySettings,
     })
-    setLoading(false)
   }, [])
+
+  const reloadAll = useCallback(async () => {
+    setLoading(true)
+    try { await refetch() } finally { setLoading(false) }
+  }, [refetch])
 
   useEffect(() => { void reloadAll() }, [reloadAll])
 
   const createFlat = useCallback(async (f: Partial<Flat>) => {
     const { data: row } = await supabase.from('flats').insert(f).select().single()
     if (row) await supabase.from('flat_costs').insert({ flat_id: (row as Flat).id })
-    await reloadAll()
+    await refetch()
     return (row as Flat) ?? null
-  }, [reloadAll])
+  }, [refetch])
 
   const updateFlat = useCallback(async (id: string, patch: Partial<Flat>) => {
     await supabase.from('flats').update(patch).eq('id', id)
-    await reloadAll()
-  }, [reloadAll])
+    await refetch()
+  }, [refetch])
 
   const deleteFlat = useCallback(async (id: string) => {
     // Remove stored photos first, then the row (cascades to costs/scores/times/photos).
@@ -120,52 +126,64 @@ export function StoreProvider({ session, children }: { session: Session; childre
     const paths = ((ph as { storage_path: string }[]) ?? []).map((p) => p.storage_path)
     if (paths.length) await supabase.storage.from(PHOTO_BUCKET).remove(paths)
     await supabase.from('flats').delete().eq('id', id)
-    await reloadAll()
-  }, [reloadAll])
+    await refetch()
+  }, [refetch])
 
   const saveCosts = useCallback(async (flatId: string, costs: Partial<FlatCosts>) => {
     await supabase.from('flat_costs').upsert({ flat_id: flatId, ...costs })
-    await reloadAll()
-  }, [reloadAll])
+    await refetch()
+  }, [refetch])
 
-  const uploadPhotos = useCallback(async (flatId: string, files: FileList | File[]) => {
+  const uploadPhotos = useCallback(async (flatId: string, files: FileList | File[], opts?: { primaryIndex?: number }) => {
     const list = Array.from(files)
     let insertedAny = false
     try {
-      for (const file of list) {
+      for (let i = 0; i < list.length; i++) {
+        const file = list[i]
         const ext = file.name.split('.').pop() || 'jpg'
         const path = `${flatId}/${crypto.randomUUID()}.${ext}`
         const up = await supabase.storage.from(PHOTO_BUCKET).upload(path, file, { upsert: false })
         if (up.error) throw up.error
 
-        const inserted = await supabase.from('flat_photos').insert({ flat_id: flatId, storage_path: path })
+        const isPrimary = opts?.primaryIndex === i
+        const inserted = await supabase.from('flat_photos').insert({ flat_id: flatId, storage_path: path, is_primary: isPrimary })
         if (inserted.error) throw inserted.error
         insertedAny = true
       }
+      // When a cover was chosen, make sure it's the only primary for the flat.
+      if (opts?.primaryIndex != null) {
+        const { data: ph } = await supabase.from('flat_photos').select('id,is_primary').eq('flat_id', flatId)
+        const primaries = ((ph as { id: string; is_primary: boolean }[]) ?? []).filter((p) => p.is_primary)
+        if (primaries.length > 1) {
+          // Keep only the last-inserted primary (the chosen cover).
+          const keep = primaries[primaries.length - 1].id
+          await supabase.from('flat_photos').update({ is_primary: false }).eq('flat_id', flatId).neq('id', keep)
+        }
+      }
     } finally {
-      if (insertedAny) await reloadAll()
+      if (insertedAny) await refetch()
     }
-  }, [reloadAll])
+  }, [refetch])
 
   const deletePhoto = useCallback(async (photo: FlatPhoto) => {
     await supabase.storage.from(PHOTO_BUCKET).remove([photo.storage_path])
     await supabase.from('flat_photos').delete().eq('id', photo.id)
-    await reloadAll()
-  }, [reloadAll])
+    await refetch()
+  }, [refetch])
 
   const setPrimaryPhoto = useCallback(async (flatId: string, photoId: string) => {
     await supabase.from('flat_photos').update({ is_primary: false }).eq('flat_id', flatId)
     await supabase.from('flat_photos').update({ is_primary: true }).eq('id', photoId)
-    await reloadAll()
-  }, [reloadAll])
+    await refetch()
+  }, [refetch])
 
   const setPoiTime = useCallback(async (flatId: string, poiId: string, mode: TravelMode, minutes: number | null, opts?: { auto?: boolean; distance_m?: number | null }) => {
     await supabase.from('flat_poi_times').upsert(
       { flat_id: flatId, poi_id: poiId, mode, minutes, auto: opts?.auto ?? false, distance_m: opts?.distance_m ?? null },
       { onConflict: 'flat_id,poi_id,mode' }
     )
-    await reloadAll()
-  }, [reloadAll])
+    await refetch()
+  }, [refetch])
 
   const bulkSetPoiTimes = useCallback(async (flatId: string, rows: { poiId: string; mode: TravelMode; minutes: number | null; distance_m: number | null }[]) => {
     if (rows.length === 0) return
@@ -173,29 +191,29 @@ export function StoreProvider({ session, children }: { session: Session; childre
       rows.map((r) => ({ flat_id: flatId, poi_id: r.poiId, mode: r.mode, minutes: r.minutes, distance_m: r.distance_m, auto: true })),
       { onConflict: 'flat_id,poi_id,mode' }
     )
-    await reloadAll()
-  }, [reloadAll])
+    await refetch()
+  }, [refetch])
 
-  const createPoi = useCallback(async (p: Partial<Poi>) => { await supabase.from('pois').insert(p); await reloadAll() }, [reloadAll])
-  const updatePoi = useCallback(async (id: string, patch: Partial<Poi>) => { await supabase.from('pois').update(patch).eq('id', id); await reloadAll() }, [reloadAll])
-  const deletePoi = useCallback(async (id: string) => { await supabase.from('pois').delete().eq('id', id); await reloadAll() }, [reloadAll])
+  const createPoi = useCallback(async (p: Partial<Poi>) => { await supabase.from('pois').insert(p); await refetch() }, [refetch])
+  const updatePoi = useCallback(async (id: string, patch: Partial<Poi>) => { await supabase.from('pois').update(patch).eq('id', id); await refetch() }, [refetch])
+  const deletePoi = useCallback(async (id: string) => { await supabase.from('pois').delete().eq('id', id); await refetch() }, [refetch])
 
-  const createCriterion = useCallback(async (c: Partial<Criterion>) => { await supabase.from('criteria').insert(c); await reloadAll() }, [reloadAll])
-  const updateCriterion = useCallback(async (id: string, patch: Partial<Criterion>) => { await supabase.from('criteria').update(patch).eq('id', id); await reloadAll() }, [reloadAll])
-  const deleteCriterion = useCallback(async (id: string) => { await supabase.from('criteria').delete().eq('id', id); await reloadAll() }, [reloadAll])
+  const createCriterion = useCallback(async (c: Partial<Criterion>) => { await supabase.from('criteria').insert(c); await refetch() }, [refetch])
+  const updateCriterion = useCallback(async (id: string, patch: Partial<Criterion>) => { await supabase.from('criteria').update(patch).eq('id', id); await refetch() }, [refetch])
+  const deleteCriterion = useCallback(async (id: string) => { await supabase.from('criteria').delete().eq('id', id); await refetch() }, [refetch])
 
   const setScore = useCallback(async (flatId: string, criterionId: string, value: number) => {
     await supabase.from('scores').upsert(
       { flat_id: flatId, criterion_id: criterionId, scorer: email, value },
       { onConflict: 'flat_id,criterion_id,scorer' }
     )
-    await reloadAll()
-  }, [reloadAll, email])
+    await refetch()
+  }, [refetch, email])
 
   const saveSettings = useCallback(async (patch: Partial<AppSettings>) => {
     await supabase.from('app_settings').update(patch).eq('id', 1)
-    await reloadAll()
-  }, [reloadAll])
+    await refetch()
+  }, [refetch])
 
   const value = useMemo<StoreContextValue>(() => ({
     ...data, session, email, readOnly, loading, reloadAll,

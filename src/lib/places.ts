@@ -1,4 +1,4 @@
-export type NearbyCategory = 'food' | 'park' | 'supermarket'
+export type NearbyCategory = 'food' | 'park' | 'supermarket' | 'gym'
 
 export interface CategoryDef {
   key: NearbyCategory
@@ -13,6 +13,7 @@ export const NEARBY_CATEGORIES: CategoryDef[] = [
   { key: 'food', label: 'Bares y restaurantes', labelEn: 'Bars and restaurants', emoji: '🍻', type: 'restaurant' },
   { key: 'park', label: 'Parques', labelEn: 'Parks', emoji: '🌳', type: 'park' },
   { key: 'supermarket', label: 'Supermercados', labelEn: 'Supermarkets', emoji: '🛒', type: 'supermarket' },
+  { key: 'gym', label: 'Gimnasios', labelEn: 'Gyms', emoji: '🏋️', type: 'gym' },
 ]
 
 export const categoryOf = (key: NearbyCategory): CategoryDef =>

@@ -34,6 +34,7 @@ interface StoreContextValue extends StoreData {
   uploadPhotos: (flatId: string, files: FileList | File[], opts?: { primaryIndex?: number }) => Promise<void>
   deletePhoto: (photo: FlatPhoto) => Promise<void>
   setPrimaryPhoto: (flatId: string, photoId: string) => Promise<void>
+  reorderPhotos: (flatId: string, orderedIds: string[]) => Promise<void>
   // poi times
   setPoiTime: (flatId: string, poiId: string, mode: TravelMode, minutes: number | null, opts?: { auto?: boolean; distance_m?: number | null }) => Promise<void>
   bulkSetPoiTimes: (flatId: string, rows: { poiId: string; mode: TravelMode; minutes: number | null; distance_m: number | null }[]) => Promise<void>
@@ -65,6 +66,13 @@ function groupBy<T>(rows: T[], key: (r: T) => string): Record<string, T[]> {
   const out: Record<string, T[]> = {}
   for (const r of rows) (out[key(r)] ||= []).push(r)
   return out
+}
+
+// supabase-js never throws on write failures (RLS, network…); it returns
+// `{ error }`. Surface those so callers' try/catch + error UI actually fire.
+function ensure<T extends { error: { message: string } | null }>(res: T): T {
+  if (res.error) throw new Error(res.error.message)
+  return res
 }
 
 export function StoreProvider({ session, children }: { session: Session; children: ReactNode }) {
@@ -109,14 +117,14 @@ export function StoreProvider({ session, children }: { session: Session; childre
   useEffect(() => { void reloadAll() }, [reloadAll])
 
   const createFlat = useCallback(async (f: Partial<Flat>) => {
-    const { data: row } = await supabase.from('flats').insert(f).select().single()
-    if (row) await supabase.from('flat_costs').insert({ flat_id: (row as Flat).id })
+    const { data: row } = ensure(await supabase.from('flats').insert(f).select().single())
+    if (row) ensure(await supabase.from('flat_costs').insert({ flat_id: (row as Flat).id }))
     await refetch()
     return (row as Flat) ?? null
   }, [refetch])
 
   const updateFlat = useCallback(async (id: string, patch: Partial<Flat>) => {
-    await supabase.from('flats').update(patch).eq('id', id)
+    ensure(await supabase.from('flats').update(patch).eq('id', id))
     await refetch()
   }, [refetch])
 
@@ -130,7 +138,7 @@ export function StoreProvider({ session, children }: { session: Session; childre
   }, [refetch])
 
   const saveCosts = useCallback(async (flatId: string, costs: Partial<FlatCosts>) => {
-    await supabase.from('flat_costs').upsert({ flat_id: flatId, ...costs })
+    ensure(await supabase.from('flat_costs').upsert({ flat_id: flatId, ...costs }))
     await refetch()
   }, [refetch])
 
@@ -138,6 +146,12 @@ export function StoreProvider({ session, children }: { session: Session; childre
     const list = Array.from(files)
     let insertedAny = false
     try {
+      // Append after the current max sort_order so the gallery order is stable
+      // and new photos land at the end.
+      const { data: maxRow } = await supabase.from('flat_photos')
+        .select('sort_order').eq('flat_id', flatId)
+        .order('sort_order', { ascending: false }).limit(1).maybeSingle()
+      let nextOrder = ((maxRow as { sort_order: number } | null)?.sort_order ?? 0) + 1
       for (let i = 0; i < list.length; i++) {
         const file = list[i]
         const ext = file.name.split('.').pop() || 'jpg'
@@ -146,7 +160,7 @@ export function StoreProvider({ session, children }: { session: Session; childre
         if (up.error) throw up.error
 
         const isPrimary = opts?.primaryIndex === i
-        const inserted = await supabase.from('flat_photos').insert({ flat_id: flatId, storage_path: path, is_primary: isPrimary })
+        const inserted = await supabase.from('flat_photos').insert({ flat_id: flatId, storage_path: path, is_primary: isPrimary, sort_order: nextOrder++ })
         if (inserted.error) throw inserted.error
         insertedAny = true
       }
@@ -167,14 +181,32 @@ export function StoreProvider({ session, children }: { session: Session; childre
 
   const deletePhoto = useCallback(async (photo: FlatPhoto) => {
     await supabase.storage.from(PHOTO_BUCKET).remove([photo.storage_path])
-    await supabase.from('flat_photos').delete().eq('id', photo.id)
+    ensure(await supabase.from('flat_photos').delete().eq('id', photo.id))
     await refetch()
   }, [refetch])
 
   const setPrimaryPhoto = useCallback(async (flatId: string, photoId: string) => {
-    await supabase.from('flat_photos').update({ is_primary: false }).eq('flat_id', flatId)
-    await supabase.from('flat_photos').update({ is_primary: true }).eq('id', photoId)
+    ensure(await supabase.from('flat_photos').update({ is_primary: false }).eq('flat_id', flatId))
+    ensure(await supabase.from('flat_photos').update({ is_primary: true }).eq('id', photoId))
     await refetch()
+  }, [refetch])
+
+  const reorderPhotos = useCallback(async (flatId: string, orderedIds: string[]) => {
+    // Optimistic: show the new order right away so the grid doesn't snap back
+    // while the writes are in flight; refetch reconciles afterwards.
+    setData((d) => {
+      const byId = new Map((d.photos[flatId] ?? []).map((p) => [p.id, p]))
+      const next = orderedIds.map((pid) => byId.get(pid)).filter((p): p is FlatPhoto => p != null)
+      return { ...d, photos: { ...d.photos, [flatId]: next } }
+    })
+    try {
+      const results = await Promise.all(
+        orderedIds.map((pid, i) => supabase.from('flat_photos').update({ sort_order: i + 1 }).eq('id', pid))
+      )
+      for (const r of results) ensure(r)
+    } finally {
+      await refetch()
+    }
   }, [refetch])
 
   const setPoiTime = useCallback(async (flatId: string, poiId: string, mode: TravelMode, minutes: number | null, opts?: { auto?: boolean; distance_m?: number | null }) => {
@@ -217,9 +249,9 @@ export function StoreProvider({ session, children }: { session: Session; childre
 
   const value = useMemo<StoreContextValue>(() => ({
     ...data, session, email, readOnly, loading, reloadAll,
-    createFlat, updateFlat, deleteFlat, saveCosts, uploadPhotos, deletePhoto, setPrimaryPhoto, setPoiTime, bulkSetPoiTimes,
+    createFlat, updateFlat, deleteFlat, saveCosts, uploadPhotos, deletePhoto, setPrimaryPhoto, reorderPhotos, setPoiTime, bulkSetPoiTimes,
     createPoi, updatePoi, deletePoi, createCriterion, updateCriterion, deleteCriterion, setScore, saveSettings,
-  }), [data, session, email, readOnly, loading, reloadAll, createFlat, updateFlat, deleteFlat, saveCosts, uploadPhotos, deletePhoto, setPrimaryPhoto, setPoiTime, bulkSetPoiTimes, createPoi, updatePoi, deletePoi, createCriterion, updateCriterion, deleteCriterion, setScore, saveSettings])
+  }), [data, session, email, readOnly, loading, reloadAll, createFlat, updateFlat, deleteFlat, saveCosts, uploadPhotos, deletePhoto, setPrimaryPhoto, reorderPhotos, setPoiTime, bulkSetPoiTimes, createPoi, updatePoi, deletePoi, createCriterion, updateCriterion, deleteCriterion, setScore, saveSettings])
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }

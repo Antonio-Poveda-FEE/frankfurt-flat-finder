@@ -66,7 +66,8 @@ export default function FlatDetail() {
   const c = costs[flat.id]
   const total = monthlyTotal(c)
   const ppm2 = pricePerM2(c, flat.size_m2)
-  const flatPhotos = [...(photos[flat.id] ?? [])].sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
+  // Stored gallery order (sort_order, user-arranged by dragging in the editor).
+  const flatPhotos = photos[flat.id] ?? []
   const recOf = (poiId: string, mode: TravelMode) => times.find((t) => t.poi_id === poiId && t.mode === mode)
 
   return (

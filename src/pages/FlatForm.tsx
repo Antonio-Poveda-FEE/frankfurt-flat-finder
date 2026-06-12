@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store/DataContext'
 import { useGeocode } from '../lib/useGeocode'
+import { useDragReorder } from '../lib/useDragReorder'
 import { useT } from '../lib/i18n'
 import { COST_FIELDS, STATUS_META } from '../lib/types'
 import type { Flat, FlatCosts, FlatStatus } from '../lib/types'
@@ -28,11 +29,19 @@ export default function FlatForm() {
   const [busy, setBusy] = useState(false)
   const [geo, setGeo] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [dropActive, setDropActive] = useState(false)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const pendingPhotoPreviews = useMemo(
     () => pendingPhotos.map((file) => ({ file, url: URL.createObjectURL(file) })),
     [pendingPhotos]
   )
+  const photoReorder = useDragReorder(pendingPhotoPreviews, (next) => {
+    // The cover follows its file to the new position.
+    const primaryFile = pendingPhotos[primaryIndex]
+    const files = next.map((p) => p.file)
+    setPendingPhotos(files)
+    setPrimaryIndex(Math.max(0, files.indexOf(primaryFile)))
+  }, !busy)
 
   async function lookupCoords() {
     if (!geocode || !form.address.trim()) return
@@ -75,6 +84,11 @@ export default function FlatForm() {
   const set = (k: keyof typeof emptyForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm({ ...form, [k]: e.target.value })
 
+  function addPendingFiles(files: FileList | File[]) {
+    const added = Array.from(files).filter((f) => f.type.startsWith('image/'))
+    if (added.length) setPendingPhotos((current) => [...current, ...added])
+  }
+
   function addPendingPhotos(e: React.ChangeEvent<HTMLInputElement>) {
     if (!e.target.files?.length) return
     // Capture the files synchronously: clearing the input below empties
@@ -82,8 +96,8 @@ export default function FlatForm() {
     // e.target.files inside it would lose the selection — the iOS "can't add
     // photos" bug, worse after other fields re-rendered the form).
     const added = Array.from(e.target.files)
-    setPendingPhotos((current) => [...current, ...added])
     e.target.value = ''
+    addPendingFiles(added)
   }
 
   function removePendingPhoto(index: number) {
@@ -238,30 +252,38 @@ export default function FlatForm() {
           <h2 className="font-semibold text-white">{t('Fotos', 'Photos')}</h2>
           <input ref={photoInputRef} type="file" accept="image/*" multiple onChange={addPendingPhotos} className="hidden" />
           <button type="button" onClick={() => photoInputRef.current?.click()} disabled={busy}
-            className="w-full rounded-lg border border-dashed border-slate-600 py-3 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50">
-            📷 {t('Añadir fotos (cámara o galería)', 'Add photos (camera or gallery)')}
+            onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDropActive(true) } }}
+            onDragLeave={() => setDropActive(false)}
+            onDrop={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropActive(false); addPendingFiles(e.dataTransfer.files) } }}
+            className={`w-full rounded-lg border border-dashed py-3 text-sm transition disabled:opacity-50 ${
+              dropActive ? 'border-sky-400 bg-sky-500/10 text-sky-300' : 'border-slate-600 text-slate-300 hover:bg-slate-800'
+            }`}>
+            {dropActive ? t('Suelta las imágenes aquí', 'Drop the images here') : `📷 ${t('Añadir fotos (cámara, galería o arrastrándolas aquí)', 'Add photos (camera, gallery or drag them here)')}`}
           </button>
           {pendingPhotoPreviews.length > 0 && (
             <>
               <div className="grid grid-cols-3 gap-2">
-                {pendingPhotoPreviews.map(({ file, url }, index) => {
-                  const primary = index === primaryIndex
+                {photoReorder.list.map(({ file, url }, index) => {
+                  const primary = file === pendingPhotos[primaryIndex]
                   return (
-                    <div key={`${file.name}-${file.lastModified}-${index}`} className={`relative aspect-square overflow-hidden rounded-lg bg-slate-800 ring-2 ${primary ? 'ring-amber-400' : 'ring-slate-700'}`}>
-                      <img src={url} alt="" className="h-full w-full object-cover" />
-                      <button type="button" title={primary ? t('Foto principal', 'Cover photo') : t('Hacer principal', 'Make cover')} onClick={() => setPrimaryIndex(index)}
+                    <div key={url} {...photoReorder.itemProps(index)}
+                      className={`relative aspect-square cursor-grab overflow-hidden rounded-lg bg-slate-800 ring-2 transition active:cursor-grabbing ${
+                        primary ? 'ring-amber-400' : 'ring-slate-700'
+                      } ${photoReorder.isDragSource(index) ? 'opacity-40 ring-sky-400' : ''}`}>
+                      <img src={url} alt="" draggable={false} className="h-full w-full select-none object-cover" />
+                      <button type="button" title={primary ? t('Foto principal', 'Cover photo') : t('Hacer principal', 'Make cover')} onClick={() => setPrimaryIndex(pendingPhotos.indexOf(file))}
                         className="absolute left-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs">
                         <span className={primary ? 'text-amber-400' : 'text-slate-300'}>{primary ? '★' : '☆'}</span>
                       </button>
                       {primary && <span className="absolute bottom-1 left-1 rounded bg-amber-500/80 px-1 text-[9px] font-bold text-black">{t('PORTADA', 'COVER')}</span>}
-                      <button type="button" onClick={() => removePendingPhoto(index)}
+                      <button type="button" onClick={() => removePendingPhoto(pendingPhotos.indexOf(file))}
                         className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white">×</button>
                     </div>
                   )
                 })}
               </div>
               <p className="text-[11px] text-slate-500">
-                {t('Se subirán al guardar el piso. Pulsa la ★ para elegir la portada (por defecto la primera).', 'They upload when you save the flat. Tap the ★ to choose the cover (the first one by default).')}
+                {t('Se subirán al guardar el piso. Pulsa la ★ para elegir la portada (por defecto la primera) y arrastra las fotos para cambiar su orden.', 'They upload when you save the flat. Tap the ★ to choose the cover (the first one by default) and drag the photos to reorder them.')}
               </p>
             </>
           )}

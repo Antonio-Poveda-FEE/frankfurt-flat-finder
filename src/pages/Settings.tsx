@@ -171,7 +171,7 @@ export default function Settings() {
                     <span className="text-lg">{p.emoji || '📍'}</span>
                     <div className="min-w-0"><span className="text-slate-100">{p.label}</span>{p.address && <span className="block truncate text-xs text-slate-500">{p.address}</span>}</div>
                   </button>
-                  {!readOnly && <button onClick={() => deletePoi(p.id)} className="shrink-0 text-xs text-red-400">{t('Eliminar', 'Delete')}</button>}
+                  {!readOnly && <button onClick={() => { if (confirm(t(`¿Eliminar el punto de interés «${p.label}»?`, `Delete the point of interest “${p.label}”?`))) void deletePoi(p.id) }} className="shrink-0 text-xs text-red-400">{t('Eliminar', 'Delete')}</button>}
                 </div>
               )}
             </li>
@@ -220,7 +220,7 @@ export default function Settings() {
                   className="w-16 rounded bg-slate-900 px-2 py-1 text-center text-white ring-1 ring-slate-700 disabled:opacity-60"
                 />
               </label>
-              {!readOnly && <button onClick={() => deleteCriterion(c.id)} className="text-xs text-red-400">✕</button>}
+              {!readOnly && <button onClick={() => { if (confirm(t(`¿Eliminar el criterio «${c.name}» y sus puntuaciones?`, `Delete the criterion “${c.name}” and its ratings?`))) void deleteCriterion(c.id) }} className="text-xs text-red-400">✕</button>}
             </li>
           ))}
         </ul>
